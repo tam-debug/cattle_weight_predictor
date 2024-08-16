@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 from torchvision.transforms import v2
 
 YOLO_MODEL_SIZES = ["n", "s", "m", "l", "x"]
