@@ -3,14 +3,13 @@ Calculates the IOU for the prediction masks against the ground truth masks.
 """
 
 from pathlib import Path
-import json
 
 import cv2
 import numpy as np
 from pycocotools import mask as mask_utils
 
 from src.constants.constants import CONFIDENCE_SCORE_THRESHOLD
-from src.utils.utils import format_image_id
+from src.utils.utils import format_image_id, parse_json
 
 
 def calculate_ious(predictions_path: Path, labels_directory: Path) -> list[float]:
@@ -38,9 +37,7 @@ def _get_masks_from_json_predictions(json_file_path: Path) -> dict:
     """
     Loads the prediction masks from the JSON file.
     """
-
-    with open(json_file_path, "r") as file:
-        predictions = json.load(file)
+    predictions = parse_json(json_file_path)
 
     image_masks = {}
 
