@@ -7,12 +7,12 @@ from pathlib import Path
 
 import numpy as np
 
-from src.constants.constants import (
+from constants.constants import (
     IMAGES_DIR,
     LABELS_DIR_WITH_HEAD,
     LABELS_DIR_WITHOUT_HEAD,
 )
-from src.utils.utils import parse_json
+from utils.utils import parse_json
 
 
 def create_label_files(

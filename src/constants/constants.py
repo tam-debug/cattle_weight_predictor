@@ -4,9 +4,22 @@ YOLO_MODEL_SIZES = ["n", "s", "m", "l", "x"]
 TRAINING_RESULTS_NAME = "training_results.csv"
 TRAINING_RESULTS_HEADER = [
     "Timestamp",
-    "Model Size",
-    "Mean IOU",
-    "Standard Deviation IOU",
+    "Model Path",
+    "Val Fold Mean IOU",
+    "Val Fold StdDev IOU",
+    "Test Fold Mean IOU",
+    "Test Fold StdDev IOU",
+]
+
+TUNING_RESULTS_HEADER = [
+    "Timestamp",
+    "With Head",
+    "Model Path",
+    "Model Number",
+    "Val Mean IOU",
+    "Val StdDev IOU",
+    "Test Mean IOU",
+    "Test StdDev IOU",
 ]
 TRAINING_MODEL_PARAMS = {
     "single_cls": True,
@@ -17,8 +30,8 @@ TRAINING_MODEL_PARAMS = {
 # Tune
 ITERATIONS = 300
 HYPERPARAM_ARGS = {
-    "epochs": [1, 100],
-    "patience": 100,
+    "epochs": [10, 100],
+    "patience": 20,
     "batch": 30,
     "project": None,
     "name": None,
@@ -55,15 +68,34 @@ DATA_AUGMENT_ARGS = {
     "crop_fraction": [0.1, 1],
 }
 TUNE_RESULTS_PATH = "results/k_fold_tune_with_head.csv"
-BEST_MODEL_RESULTS = "results/best_model.csv"
-TUNE_RESULTS_HEADER = [
+TUNE_TRAIN_RESULTS_FILENAME = "tune_train_results.csv"
+TUNE_TRAIN_RESULTS_HEADER = [
+    "Timestamp",
+    "With Head",
+    "Model Path",
+    "Val Mean IOU",
+    "Val StdDev IOU",
+]
+TUNE_TEST_RESULTS_HEADER = [
+    "Timestamp",
+    "With Head",
+    "Model Path",
+    "Val Mean IOU",
+    "Val StdDev IOU",
+]
+TUNE_TEST_RESULTS_FILENAME = "tune_test_results.csv"
+BEST_MODEL_RESULTS_FILENAME = "best_model.csv"
+BEST_MODEL_RESULTS_HEADER = [
     "Timestamp",
     "With Head",
     "Model_Size",
     "Model Number",
-    "Mean IOU",
-    "Standard Deviation IOU",
+    "Val Mean IOU",
+    "Val StdDevIOU",
+    "Test Mean IOU",
+    "Test StdDevIOU",
 ]
+
 
 # Validate
 CONFIDENCE_SCORE_THRESHOLD = 0.5

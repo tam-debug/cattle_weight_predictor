@@ -2,92 +2,125 @@
 Train a segmentation model.
 """
 
+from dataclasses import dataclass
 import logging
 import numpy as np
 from pathlib import Path
 
 from ultralytics import YOLO
 
-from src.constants.constants import TRAINING_RESULTS_NAME, TRAINING_RESULTS_HEADER
-from src.utils.utils import get_current_timestamp, get_model_size, write_csv_file
-from validate import validate
+from constants.constants import (
+    TRAINING_RESULTS_HEADER,
+)
+from utils.utils import get_current_timestamp, write_csv_file
+from segmentation_model.validate import validate
 
 logger = logging.getLogger(__name__)
 
 
-def get_train_project(data_path: Path) -> str:
-    """
-    Gets a project directory for training.
+@dataclass
+class TrainingResults:
+    timestamps: list[str]
+    model_path: str
+    val_ious: list[float]
+    test_ious: list[float]
+    # length should be 5
+    val_fold_ious: list[float]
+    val_fold_stds: list[float]
+    test_fold_ious: list[float]
+    test_fold_stds: list[float]
 
-    :param data_path: The path of the dataset YAML.
-    :return: The project path that can be used during model training.
-    """
-    return f"{Path(data_path).parts[0]}/runs/segment/kfold"
-
-
-def write_training_results(
-    timestamps: list[float], ious: list[list[float]], model_size: str
-):
-    """
-    Writes results from a model training to a CSV file.
-
-    :param timestamps: The timestamps of the training results.
-    :param ious: The IOUs of the training results.
-    :param model_size: The size of the model that was trained.
-    """
-    rows = []
-    for i in range(len(ious)):
-        ious_fold = ious[i]
-        timestamp = timestamps[i]
-
-        fold_iou = np.mean(ious_fold)
-        fold_std = np.std(ious_fold, ddof=1)
-
-        rows.append([timestamp, model_size, fold_iou, fold_std])
-
-    results_path = Path(f"results/{TRAINING_RESULTS_NAME}")
-
-    write_training_results(
-        rows=rows, headers=TRAINING_RESULTS_HEADER, results_path=results_path
-    )
+    def __init__(self, model_path: str):
+        self.timestamps = []
+        self.model_path = model_path
+        self.val_ious = []
+        self.test_ious = []
+        self.val_fold_ious = []
+        self.test_fold_stds = []
+        self.test_fold_ious = []
+        self.test_fold_stds = []
 
 
 def train(
-    ds_yamls: list[Path], model_path: str, model_kwargs: dict
-) -> tuple[list[float], list[list]]:
+    ds_yamls: list[Path], model_path: str, model_kwargs: dict, run_test: bool = True
+) -> TrainingResults:
     """
     Trains the model on the folds specified in the YAML files.
 
     :param ds_yamls: The YAMLs of the datasets to train on.
     :param model_path: The path of the model e.g. "yolov8m-seg.pt"
     :param model_kwargs: The key word arguments to pass to the model.
+    :param run_test: Whether to run the data on the test set.
     :return: The IOUs for each prediction, Training results rows of format (timestamp, fold average IOU, fold std IOU)
     """
 
-    ious = []
-    timestamps, fold_ious, fold_stds = [], [], []
+    training_results = TrainingResults(model_path=model_path)
 
-    for i in len(ds_yamls):
-        timestamp = get_current_timestamp()
+    for i in range(len(ds_yamls)):
         dataset_yaml = ds_yamls[i]
+
+        model_kwargs["single_cls"] = True
+
+        training_results.timestamps.append(get_current_timestamp())
+
         model = YOLO(model_path)
-        model.train(data=dataset_yaml, **model_kwargs)
+        train_res = model.train(data=dataset_yaml, **model_kwargs)
 
-        val_labels_dir = ds_yamls[0].parent / "labels"
-        _ious = validate(
-            data_path=dataset_yaml, model=model, labels_directory=val_labels_dir
+        _val_ious = validate(
+            model=model,
+            project=train_res.save_dir,
+            split="val",
+            labels_directory=ds_yamls[i].parent / "val/labels",
         )
-        ious.append(_ious)
+        if len(_val_ious) > 0:
+            training_results.val_ious.extend(_val_ious)
+            training_results.val_fold_ious.append(np.mean(_val_ious))
+            training_results.val_fold_stds.append(np.std(_val_ious, ddof=1))
+        else:
+            training_results.val_fold_ious.append(0)
+            training_results.val_fold_stds.append(0)
 
-        timestamps.append(timestamp)
-        fold_ious.append(np.mean(_ious))
-        fold_stds.append(np.std(_ious, ddof=1))
+        if run_test:
+            _test_ious = validate(
+                model=model,
+                project=train_res.save_dir,
+                labels_directory=ds_yamls[i].parent.parent.parent / "test/labels",
+                split="test",
+            )
+
+            training_results.test_ious.extend(_test_ious)
+
+            training_results.test_fold_ious.append(np.mean(_test_ious))
+            training_results.test_fold_stds.append(np.std(_test_ious, ddof=1))
 
     logger.debug(
         f"""Results
-    {ious=}
-    """
+{training_results.val_ious=}
+"""
     )
-    rows = list(zip(timestamps, fold_ious, fold_stds))
 
-    return ious, rows
+    return training_results
+
+
+def write_training_results(file_path: Path, training_results: TrainingResults):
+    """
+    Write the training results to a file.
+
+    :param file_path: The file to write to.
+    :param training_results: The training results object.
+    """
+    model_path_column = [
+        training_results.model_path for i in range(len(training_results.timestamps))
+    ]
+    rows = list(
+        zip(
+            training_results.timestamps,
+            model_path_column,
+            training_results.val_fold_ious,
+            training_results.val_fold_stds,
+            training_results.test_fold_ious,
+            training_results.test_fold_stds,
+        )
+    )
+
+    write_csv_file(file_path=file_path, header=TRAINING_RESULTS_HEADER, rows=rows)

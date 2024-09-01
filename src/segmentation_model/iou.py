@@ -6,10 +6,11 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
 from pycocotools import mask as mask_utils
 
-from src.constants.constants import CONFIDENCE_SCORE_THRESHOLD
-from src.utils.utils import format_image_id, parse_json
+from constants.constants import CONFIDENCE_SCORE_THRESHOLD
+from utils.utils import format_image_id, parse_json
 
 
 def calculate_ious(predictions_path: Path, labels_directory: Path) -> list[float]:
@@ -25,8 +26,7 @@ def calculate_ious(predictions_path: Path, labels_directory: Path) -> list[float
 
     for image_id, pred_masks in prediction_masks.items():
         gt_mask_path = labels_directory / f"{format_image_id(image_id)}.txt"
-        combined_gt_masks = _ground_truth_to_mask(gt_mask_path, pred_masks[0].shape)
-        gt_masks = _separate_instances(combined_gt_masks)
+        gt_masks = _ground_truth_to_mask(gt_mask_path, pred_masks[0].shape)
 
         _ious = _calculate_ious(pred_masks, gt_masks)
         ious.extend(_ious)
@@ -56,26 +56,51 @@ def _get_masks_from_json_predictions(json_file_path: Path) -> dict:
     return image_masks
 
 
-def _ground_truth_to_mask(file_path, img_shape):
+def _ground_truth_to_mask(
+    file_path: Path, img_shape: tuple[int, int]
+) -> list[np.ndarray]:
     """
     Load the label text file that contains a ground truth mask.
     """
 
-    mask = np.zeros(img_shape[:2], dtype=np.uint8)
+    masks = []
     img_height, img_width = img_shape[:2]
 
     with open(file_path, "r") as f:
         lines = f.readlines()
         for line in lines:
-            coords = np.array([float(c) for c in line.split()[1:]]).reshape(-1, 2)
-            coords[:, 0] *= img_width  # Scale x coordinates
-            coords[:, 1] *= img_height  # Scale y coordinates
-            coords = coords.astype(int)
+            if line.strip():
+                mask = np.zeros(img_shape[:2], dtype=np.uint8)
+                coords = np.array([float(c) for c in line.split()[1:]]).reshape(-1, 2)
+                coords[:, 0] *= img_width  # Scale x coordinates
+                coords[:, 1] *= img_height  # Scale y coordinates
+                coords = coords.astype(int)
 
-            # Fill the polygon formed by the boundary coordinates
-            cv2.fillPoly(mask, [coords], 1)
+                # Fill the polygon formed by the boundary coordinates
+                cv2.fillPoly(mask, [coords], 1)
+                masks.append(mask)
 
-    return mask
+    return masks
+
+
+def show_mask(mask: np.ndarray):
+
+    # resized_image = cv2.resize(mask (width, height), interpolation=cv2.INTER_NEAREST)
+
+    # Display the original and resized images
+    plt.figure(figsize=(10, 5))
+
+    plt.subplot(1, 2, 1)
+    plt.title("Original Image")
+    plt.imshow(mask, cmap="gray")
+    plt.axis("off")
+
+    # plt.subplot(1, 2, 2)
+    # plt.title('Resized Image')
+    # plt.imshow(resized_image, cmap='gray')
+    # plt.axis('off')
+
+    plt.show()
 
 
 def _separate_instances(mask):
@@ -89,10 +114,14 @@ def _separate_instances(mask):
     for i in range(1, num_labels):  # Start from 1 to skip the background
         instance_mask = (labels == i).astype(np.uint8) * 255
         masks.append(instance_mask)
+
+    for m in masks:
+        resized_image = cv2.resize(mask, (1280, 720), interpolation=cv2.INTER_NEAREST)
+        show_mask(resized_image)
     return masks
 
 
-def _calculate_ious(pred_masks, gt_masks):
+def _calculate_ious(pred_masks, gt_masks) -> list[float]:
     """
     Calculates the IOUs for the prediction masks and the ground truth masks.
     """

@@ -1,29 +1,30 @@
-"""
-Function for validating the segmentation model against a given dataset.
-"""
-
+import os
 from pathlib import Path
 
-from ultralytics import YOLO
-
-from iou import calculate_ious
-from src.constants.constants import PREDICTION_FILENAME
+from constants.constants import PREDICTION_FILENAME
+from segmentation_model.iou import calculate_ious
 
 
-def validate(data_path: Path, model: YOLO, labels_directory: Path) -> list[float]:
+def validate(
+    model, project: Path, labels_directory: Path, split: str = "val"
+) -> list[float]:
     """
-    Runs the segmentation model against the dataset YAML and calculates the IOU for the masks.
+    Validate the model against the chosen split.
 
-    :param data_path: The dataset YAML file path that contains the validation directory "val"
-    :param model: The model to run the dataset against.
-    :param labels_directory: The directory that contains the label text files.
+    :param model: The model to run validation on.
+    :param project: The directory the validation results will be saved.
+    :param labels_directory: The directory where the labels are stored.
+    :param split: The split to run validation on e.g. "val", "test"
     :return: The IOUs from the validation.
     """
-    results = model.val(data=data_path, save_json=True)
+    test_results = model.val(split=split, save_json=True, name=split, project=project)
 
-    predictions_path = results.save_dir / PREDICTION_FILENAME
-    ious = calculate_ious(
-        predictions_path=predictions_path, labels_directory=labels_directory
-    )
+    test_predictions_path = test_results.save_dir / PREDICTION_FILENAME
+    if os.path.exists(test_predictions_path):
+        ious = calculate_ious(
+            predictions_path=test_predictions_path, labels_directory=labels_directory
+        )
+    else:
+        ious = []
 
     return ious
