@@ -10,13 +10,15 @@ from torchvision.transforms import v2
 from torchvision.models.resnet import ResNet18_Weights
 from torch.utils.data import DataLoader, Dataset
 
+from weight_model.metrics import Metrics
+
 logger = logging.getLogger(__name__)
 
 
 class CustomDataset(Dataset):
-    def __init__(self, depth_masks, heights, transform=None):
+    def __init__(self, depth_masks, weights, transform=None):
         self.depth_masks = depth_masks
-        self.heights = heights
+        self.weights = weights
         self.transform = transform
 
     def __len__(self):
@@ -24,14 +26,13 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, idx):
         depth_mask = self.depth_masks[idx]
-        height = self.heights[idx]
-
+        weight = self.weights[idx]
         depth_mask = torch.tensor(depth_mask, dtype=torch.float32)
 
         if self.transform:
             depth_mask = self.transform(depth_mask)
 
-        return depth_mask, torch.tensor(height, dtype=torch.float32)
+        return depth_mask, torch.tensor(weight, dtype=torch.float32)
 
 
 @dataclass
@@ -57,16 +58,22 @@ def split_dataset(
     return train_loader, test_loader
 
 
-def run_resnet(depth_masks: np.ndarray, weights: np.ndarray):
+def run_resnet(depth_masks: np.ndarray, weights: np.ndarray) -> tuple[torch.Tensor, Metrics]:
 
     depth_masks = np.expand_dims(depth_masks, axis=1)
     depth_masks = np.repeat(depth_masks, 3, axis=1)
 
-    transform = v2.Compose(
-        [v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
-    )
+    transform = v2.Compose([
+        v2.RandomHorizontalFlip(0.5),
+        v2.RandomVerticalFlip(0.5),
+        v2.RandomRotation(30),
+        v2.RandomResizedCrop(size=(224, 224), scale=(0.8, 1.0)),
+        v2.RandomAffine(20),
+        v2.RandomPerspective(),
+        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
     dataset = CustomDataset(depth_masks, weights, transform=transform)
-    train_loader, test_loader = split_dataset(dataset, test_proportion=0.2)
+    train_loader, test_loader = split_dataset(dataset, test_proportion=0.3)
 
     model = load_resnet()
     loss_function = nn.MSELoss()
@@ -81,12 +88,23 @@ def run_resnet(depth_masks: np.ndarray, weights: np.ndarray):
     )
     plot_training_loss(training_results.training_loss)
 
+    predictions = test(model=model, test_loader=test_loader)
+
+    y_true = []
+    for depth_masks_batch, weight_batch in test_loader:
+        y_true.extend(weight_batch.numpy())
+    y_true = np.array(y_true)
+
+    metrics = Metrics(predictions, y_true)
+    metrics.print()
+    return model, metrics
+
 
 def train(
     model: torch.Tensor,
     train_loader: DataLoader,
     optimiser: torch.optim.Optimizer,
-    loss_function: torch.nn._Loss,
+    loss_function,
     epochs: int = 10,
 ) -> TrainingResults:
 
@@ -94,17 +112,17 @@ def train(
     model.train()
     for epoch in range(epochs):
         running_loss = 0.0
-        for images, heights in train_loader:
+        for depth_mask, weights in train_loader:
             if torch.cuda.is_available():
-                images, heights = images.to("cuda"), heights.to("cuda")
+                depth_mask, weights = depth_mask.to("cuda"), weights.to("cuda")
                 model.to("cuda")
 
             # Zero the parameter gradients
             optimiser.zero_grad()
 
             # Forward pass
-            outputs = model(images)
-            loss = loss_function(outputs.squeeze(), heights)
+            outputs = model(depth_mask)
+            loss = loss_function(outputs.squeeze(), weights)
 
             # Backward pass and optimization
             loss.backward()
@@ -142,3 +160,18 @@ def plot_training_loss(loss: list[float]):
     plt.ylabel("Loss")
     plt.title("Training Loss")
     plt.show()
+
+def test(model: torch.Tensor, test_loader: DataLoader) -> list[float]:
+    model.eval()
+    predictions = np.array([])
+    for depth_mask, weight in test_loader:
+        if torch.cuda.is_available():
+            depth_mask, weights = depth_mask.to("cuda"), weights.to("cuda")
+            model.to("cuda")
+
+        pred = model(depth_mask)
+        predictions = np.append(predictions, pred.flatten().detach().numpy())
+
+    predictions = predictions.flatten()
+    logger.info(predictions)
+    return predictions
