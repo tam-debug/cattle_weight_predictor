@@ -36,6 +36,7 @@ class TrainingResults:
         self.val_ious = []
         self.test_ious = []
         self.val_fold_ious = []
+        self.val_fold_stds = []
         self.test_fold_stds = []
         self.test_fold_ious = []
         self.test_fold_stds = []

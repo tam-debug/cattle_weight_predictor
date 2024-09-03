@@ -125,7 +125,6 @@ def tune(
         ),
     )
 
-    best_model_number = train_results.best_model_index + 1
     best_model_iou = train_results.mean_ious[train_results.best_model_index]
     best_model_std = train_results.std_ious[train_results.best_model_index]
     test_mean_ious = np.mean(test_results.test_ious)
@@ -139,7 +138,7 @@ def tune(
                 train_results.timestamps[train_results.best_model_index],
                 with_head_flag,
                 model_file_path,
-                best_model_number,
+                train_results.best_model_index,
                 best_model_iou,
                 best_model_std,
                 test_mean_ious,
@@ -149,7 +148,7 @@ def tune(
     )
 
     logger.info(
-        f"Best model {best_model_number} with mean IOU {best_model_iou} and standard deviation {best_model_std}"
+        f"Best model {train_results.best_model_index} with mean IOU {best_model_iou} and standard deviation {best_model_std}"
     )
 
 

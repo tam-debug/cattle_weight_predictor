@@ -89,7 +89,7 @@ BEST_MODEL_RESULTS_HEADER = [
     "Timestamp",
     "With Head",
     "Model_Size",
-    "Model Number",
+    "Model Index",
     "Val Mean IOU",
     "Val StdDevIOU",
     "Test Mean IOU",
