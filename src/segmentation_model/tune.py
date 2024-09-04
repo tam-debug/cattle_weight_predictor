@@ -89,7 +89,7 @@ def tune(
         model_file_path=model_file_path,
     )
 
-    model_dir = project_path / f"iter{train_results.best_model_index}"
+    iteration_dir = project_path / f"iter{train_results.best_model_index}"
     with_head_flag = "Y" if "without_head" not in data_path.as_posix() else "N"
     with_head_flags = [with_head_flag for i in range(iterations)]
 
@@ -108,7 +108,7 @@ def tune(
     )
 
     test_results = test_iteration(
-        iteration_dir=model_dir,
+        iteration_dir=iteration_dir,
         labels_directory=ds_yamls[0].parent.parent.parent / "test/labels",
     )
     write_csv_file(
@@ -212,7 +212,7 @@ def test_iteration(iteration_dir: Path, labels_directory: Path) -> TuneTestingRe
         test_results.timestamps.append(get_current_timestamp())
         _test_ious = validate(
             model=YOLO(f"{iteration_dir.as_posix()}/{train_path}/weights/best.pt"),
-            project=Path(train_path),
+            project=iteration_dir / Path(train_path),
             labels_directory=labels_directory,
             split="test",
         )
