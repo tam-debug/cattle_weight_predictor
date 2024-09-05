@@ -161,3 +161,10 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
 /tests/
+/run_scripts/
+/data/
+/results/
+/runs/
+/runs_weight/
+/yolov8m-seg.pt
+/run_scripts/

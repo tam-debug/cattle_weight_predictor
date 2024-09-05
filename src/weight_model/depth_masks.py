@@ -9,6 +9,7 @@ import json
 from json import JSONEncoder
 import logging
 from pathlib import Path
+from typing import Union
 
 import numpy as np
 
@@ -238,7 +239,7 @@ def _scale_coordinate(
     return scaled_y, scaled_x
 
 
-def _load_depth_frame(file_path: str | Path) -> np.ndarray:
+def _load_depth_frame(file_path: Union[str,Path]) -> np.ndarray:
     """
     Loads the depth image into a numpy array.
     """

@@ -1,7 +1,9 @@
+import os.path
 from dataclasses import dataclass
+import os
 import logging
+from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
@@ -10,7 +12,7 @@ from torchvision.transforms import v2
 from torchvision.models.resnet import ResNet18_Weights
 from torch.utils.data import DataLoader, Dataset
 
-from weight_model.metrics import Metrics
+from weight_model.results import Metrics, plot_training_loss, write_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +60,9 @@ def split_dataset(
     return train_loader, test_loader
 
 
-def run_resnet(depth_masks: np.ndarray, weights: np.ndarray) -> tuple[torch.Tensor, Metrics]:
+def run_resnet(depth_masks: np.ndarray, weights: np.ndarray, results_dir: Path) -> tuple[torch.Tensor, Metrics]:
+    if not os.path.exists(results_dir):
+        os.mkdir(results_dir)
 
     depth_masks = np.expand_dims(depth_masks, axis=1)
     depth_masks = np.repeat(depth_masks, 3, axis=1)
@@ -84,9 +88,11 @@ def run_resnet(depth_masks: np.ndarray, weights: np.ndarray) -> tuple[torch.Tens
         train_loader=train_loader,
         optimiser=optimiser,
         loss_function=loss_function,
-        epochs=5,
+        epochs=100,
     )
-    plot_training_loss(training_results.training_loss)
+
+    loss_plot_path = results_dir / "loss_plot.png"
+    plot_training_loss(training_results.training_loss, file_path=loss_plot_path)
 
     predictions = test(model=model, test_loader=test_loader)
 
@@ -96,7 +102,11 @@ def run_resnet(depth_masks: np.ndarray, weights: np.ndarray) -> tuple[torch.Tens
     y_true = np.array(y_true)
 
     metrics = Metrics(predictions, y_true)
+
+    metrics_file_path = results_dir / "test_results.csv"
+    write_metrics(metrics=metrics, file_path=metrics_file_path)
     metrics.print()
+
     return model, metrics
 
 
@@ -105,7 +115,7 @@ def train(
     train_loader: DataLoader,
     optimiser: torch.optim.Optimizer,
     loss_function,
-    epochs: int = 10,
+    epochs: int = 100,
 ) -> TrainingResults:
 
     training_results = TrainingResults(model)
@@ -148,29 +158,22 @@ def load_resnet() -> torch.Tensor:
         nn.Linear(model.fc.in_features, 128),  # Dense layer with 128 units
         nn.ReLU(),  # Activation function
         nn.Linear(128, 1),  # Final layer with single output
-        nn.Sigmoid(),  # Sigmoid to ensure output is between 0 and 1
+        # nn.Sigmoid(),  # Sigmoid to ensure output is between 0 and 1
     )
     print(model.eval())
     return model
 
 
-def plot_training_loss(loss: list[float]):
-    plt.plot(loss)
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.title("Training Loss")
-    plt.show()
-
 def test(model: torch.Tensor, test_loader: DataLoader) -> list[float]:
     model.eval()
     predictions = np.array([])
-    for depth_mask, weight in test_loader:
+    for depth_mask, weights in test_loader:
         if torch.cuda.is_available():
             depth_mask, weights = depth_mask.to("cuda"), weights.to("cuda")
             model.to("cuda")
 
         pred = model(depth_mask)
-        predictions = np.append(predictions, pred.flatten().detach().numpy())
+        predictions = np.append(predictions, pred.cpu().flatten().detach().numpy())
 
     predictions = predictions.flatten()
     logger.info(predictions)

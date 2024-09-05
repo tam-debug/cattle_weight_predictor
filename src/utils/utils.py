@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from src.constants.constants import YOLO_MODEL_SIZES
+from constants.constants import YOLO_MODEL_SIZES
 
 
 def get_yolo_seg_model_name(size: str) -> str:
@@ -86,6 +86,7 @@ def write_csv_file(file_path: Path, rows: list[list], header=None):
         writer = csv.writer(file)
         if header is not None and mode == "w":
             writer.writerow(header)
+            writer.writerows(rows)
         else:
             writer.writerows(rows)
 

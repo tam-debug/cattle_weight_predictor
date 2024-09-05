@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import torch
+from typing import Union
 from ultralytics import YOLO
 from ultralytics.engine.results import Results
 
@@ -15,7 +16,7 @@ class ImageSegmentationMasks:
     original_hw: tuple[int, int]
 
 def generate_masks(
-    model_path: str, images: Path | list[Path]
+    model_path: str, images: Union[Path, list[Path]]
 ) -> dict[Path, ImageSegmentationMasks]:
     """
     Generates the segmentation masks for the given images.
@@ -44,7 +45,7 @@ def generate_masks(
     return image_masks
 
 
-def predict(model_path: str, source: Path | list[Path]) -> list[Results]:
+def predict(model_path: str, source: Union[Path, list[Path]]) -> list[Results]:
     """
     Generates segmentation masks for the given image using the given model.
 
