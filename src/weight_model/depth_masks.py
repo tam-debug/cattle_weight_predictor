@@ -90,6 +90,7 @@ def generate_depth_masks(
     depth_image_dir: Path,
     weights_file: Path,
     save_json=False,
+    use_id_mapping=True
 ) -> list[DepthMaskWeight]:
     """
     Generates the segmented depth masks and with the weights list.
@@ -109,28 +110,44 @@ def generate_depth_masks(
 
     depth_mappings = []
 
-    for image_path, _seg_masks in seg_masks.items():
-        seg_masks = _seg_masks.masks
-        depth_frame = _load_depth_frame(
-            file_path=_get_depth_image_name(
-                image_path=image_path, depth_image_dir=depth_image_dir
+    if use_id_mapping:
+        for image_path, _seg_masks in seg_masks.items():
+            seg_masks = _seg_masks.masks
+            depth_frame = _load_depth_frame(
+                file_path=_get_depth_image_name(
+                    image_path=image_path, depth_image_dir=depth_image_dir
+                )
             )
-        )
-        resized_seg_masks = resize_mask(seg_masks, height=depth_frame.shape[0], width=depth_frame.shape[1])
+            resized_seg_masks = resize_mask(seg_masks, height=depth_frame.shape[0], width=depth_frame.shape[1])
 
-        id_mapping_file = image_path.with_suffix(".json")
+            id_mapping_file = image_path.with_suffix(".json")
 
-        seg_mappings = _match_mask_to_weight(
-            seg_masks=resized_seg_masks,
-            weights=weights,
-            id_mapping_file=id_mapping_file,
-            original_scale=_seg_masks.original_hw,
-        )
+            seg_mappings = _match_mask_to_weight(
+                seg_masks=resized_seg_masks,
+                weights=weights,
+                id_mapping_file=id_mapping_file,
+                original_scale=_seg_masks.original_hw,
+            )
 
-        _depth_mappings = _create_depth_masks(
-            seg_mappings=seg_mappings, depth_frame=depth_frame
-        )
-        depth_mappings.extend(_depth_mappings)
+            _depth_mappings = _create_depth_masks(
+                seg_mappings=seg_mappings, depth_frame=depth_frame
+            )
+            depth_mappings.extend(_depth_mappings)
+
+    else:
+        for image_path, _seg_masks in seg_masks.items():
+            weight = weights[image_path.stem]
+            depth_frame = _load_depth_frame(
+                file_path=_get_depth_image_name(
+                    image_path=image_path, depth_image_dir=depth_image_dir
+                )
+            )
+            binary_mask = _seg_masks.masks[0]
+            depth_mask = _create_depth_mask(binary_mask=binary_mask, depth_frame=depth_frame)
+            depth_mappings.append(DepthMaskWeight(
+                depth_mask=depth_mask, weight=weight
+            ))
+
 
     if save_json:
         _save_depth_masks(depth_masks=depth_mappings)
@@ -264,6 +281,7 @@ def _create_depth_masks(
         depth_masks.append(
             DepthMaskWeight(depth_mask=depth_mask, weight=seg_mapping.weight)
         )
+        show_mask(depth_mask)
 
     return depth_masks
 

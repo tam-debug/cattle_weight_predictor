@@ -123,3 +123,4 @@ def resize_mask(masks: torch.tensor, height: int, width: int) -> np.ndarray:
     ).squeeze(1)
     resized_masks_np = resized_masks.numpy()
     return resized_masks_np
+
