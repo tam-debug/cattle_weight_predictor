@@ -70,7 +70,8 @@ def train(
         _val_ious = validate(
             model=model,
             project=train_res.save_dir,
-            split="val",
+            name="val",
+            input_directory=ds_yamls[i].parent / "val/images",
             labels_directory=ds_yamls[i].parent / "val/labels",
         )
         if len(_val_ious) > 0:
@@ -85,8 +86,9 @@ def train(
             _test_ious = validate(
                 model=model,
                 project=train_res.save_dir,
+                name="test",
+                input_directory=ds_yamls[i].parent.parent.parent / "test/images",
                 labels_directory=ds_yamls[i].parent.parent.parent / "test/labels",
-                split="test",
             )
 
             training_results.test_ious.extend(_test_ious)

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from segmentation_model.iou import calculate_ious
+from segmentation_model.iou import calculate_ious_json
 
 
 @dataclass
@@ -27,9 +27,7 @@ def get_results_nokfolds(predictions_path: Path, labels_dir: Path) -> IouResult:
     :return: The IOUs of each prediction from the run.
     """
 
-    ious = calculate_ious(
-        predictions_path=predictions_path, labels_directory=labels_dir
-    )
+    ious = calculate_ious_json(labels_directory=labels_dir, predictions_path=predictions_path)
     mean_iou = np.mean(ious)
     std_iou = np.std(ious, ddof=1)
     iou_result = IouResult(
@@ -58,9 +56,7 @@ def get_results_kfolds(run_dir: Path, data_train: Path) -> list[IouResult]:
             predictions_path = run_dir / f"train/predictions.json"
 
         labels_dir = data_train / f"split_{i}/val/labels"
-        _ious = calculate_ious(
-            predictions_path=predictions_path, labels_directory=labels_dir
-        )
+        _ious = calculate_ious_json(labels_directory=labels_dir, predictions_path=predictions_path)
         ious.extend(_ious)
         rows.append(
             IouResult(
@@ -95,7 +91,7 @@ def get_tune_results_kfolds(iterations_dir: Path, data_train: Path) -> list[IouR
             if i != 1:
                 predictions_path = iteration_dir / f"train{i}/predictions.json"
                 labels_dir = data_train / f"split_{i}/train/labels"
-                _ious = calculate_ious(
+                _ious = calculate_ious_json(
                     predictions_path=predictions_path, labels_dir=labels_dir
                 )
                 iteration_ious.extend(_ious)

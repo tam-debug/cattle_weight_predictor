@@ -110,6 +110,7 @@ def tune(
     test_results = test_iteration(
         iteration_dir=iteration_dir,
         labels_directory=ds_yamls[0].parent.parent.parent / "test/labels",
+        images_directory=ds_yamls[0].parent.parent.parent / "test/images",
     )
     write_csv_file(
         file_path=project_path / TUNE_TEST_RESULTS_FILENAME,
@@ -199,7 +200,7 @@ def train_iterations(
     )
 
 
-def test_iteration(iteration_dir: Path, labels_directory: Path) -> TuneTestingResults:
+def test_iteration(iteration_dir: Path, labels_directory: Path, images_directory: Path) -> TuneTestingResults:
     """
     Run the best iteration's models on the test set.
     :param iteration_dir: The directory for the best iteration.
@@ -213,8 +214,9 @@ def test_iteration(iteration_dir: Path, labels_directory: Path) -> TuneTestingRe
         _test_ious = validate(
             model=YOLO(f"{iteration_dir.as_posix()}/{train_path}/weights/best.pt"),
             project=iteration_dir / Path(train_path),
+            name="test",
             labels_directory=labels_directory,
-            split="test",
+            input_directory=images_directory
         )
         test_results.test_fold_ious.append(np.mean(_test_ious))
         test_results.test_fold_stds.append(np.std(_test_ious, ddof=1))

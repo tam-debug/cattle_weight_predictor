@@ -1,30 +1,74 @@
-import os
+"""
+Runs the model on an input and generates the IOU for the predictions.
+"""
+
 from pathlib import Path
 
-from constants.constants import PREDICTION_FILENAME
-from segmentation_model.iou import calculate_ious
+from ultralytics import YOLO
+
+from segmentation_model.iou import PredictionResult, calculate_ious
 
 
 def validate(
-    model, project: Path, labels_directory: Path, split: str = "val"
+    model: YOLO, project: Path, name: str, input_directory: Path, labels_directory: Path
 ) -> list[float]:
     """
-    Validate the model against the chosen split.
+    Validates the model against the input, with IOU as the main metric.
 
     :param model: The model to run validation on.
     :param project: The directory the validation results will be saved.
+    :param name: The name of the folder that will store the validation results.
     :param labels_directory: The directory where the labels are stored.
-    :param split: The split to run validation on e.g. "val", "test"
+    :param input_directory: The directory to run the model on.
     :return: The IOUs from the validation.
     """
-    test_results = model.val(split=split, save_json=True, name=split, project=project)
+    prediction_masks = []
+    conf_threshold = 0.5
 
-    test_predictions_path = test_results.save_dir / PREDICTION_FILENAME
-    if os.path.exists(test_predictions_path):
-        ious = calculate_ious(
-            predictions_path=test_predictions_path, labels_directory=labels_directory
+    results = model.predict(
+        source=input_directory, project=project, save=True, imgsz=640, name=name
+    )
+
+    for result in results:
+        image_id = Path(result.path).stem
+        bounding_box_conf = result.boxes.conf
+        result_masks = result.masks
+        masks = []
+        if result_masks:
+            for i in range(len(bounding_box_conf)):
+                if bounding_box_conf[i] > conf_threshold:
+                    masks.append(result_masks.data[i].cpu().numpy())
+
+        prediction_masks.append(
+            PredictionResult(
+                image_id=image_id,
+                masks=masks,
+                mask_size=_scale_coordinate_same_aspect_ratio(
+                    height=result.orig_shape[0],
+                    width=result.orig_shape[1],
+                    dimension=640,
+                ),
+            )
         )
-    else:
-        ious = []
 
+    ious = calculate_ious(
+        labels_directory=labels_directory, prediction_results=prediction_masks
+    )
     return ious
+
+
+def _scale_coordinate_same_aspect_ratio(
+    height, width, dimension: int = 640
+) -> tuple[int, int]:
+    """
+    Scales the coordinate to the given dimension.
+    """
+    if height > width:
+        scale_factor = dimension / height
+    else:
+        scale_factor = dimension / width
+
+    new_width = int(width * scale_factor)
+    new_height = int(height * scale_factor)
+
+    return new_height, new_width

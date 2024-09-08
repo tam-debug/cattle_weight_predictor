@@ -2,6 +2,7 @@
 Calculates the IOU for the prediction masks against the ground truth masks.
 """
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
@@ -12,8 +13,33 @@ from pycocotools import mask as mask_utils
 from constants.constants import CONFIDENCE_SCORE_THRESHOLD
 from utils.utils import format_image_id, parse_json
 
+@dataclass
+class PredictionResult:
+    image_id: str
+    masks: list
+    mask_size: tuple[int, int]
+def calculate_ious(labels_directory: Path, prediction_results: list[PredictionResult]) -> list[float]:
+    """
+    Calculates the IOU for each prediction mask against its ground truth mask.
 
-def calculate_ious(predictions_path: Path, labels_directory: Path) -> list[float]:
+    :param labels_directory: The directory containing the label text files.
+    :return: The IOUs for the prediction masks.
+    """
+    ious = []
+
+    for prediction_result in prediction_results:
+        if prediction_result.image_id == "00342":
+            a = 1
+        pred_masks = prediction_result.masks
+        mask_size = pred_masks[0].shape if len(pred_masks) > 0 else prediction_result.mask_size
+        gt_mask_path = labels_directory / f"{prediction_result.image_id}.txt"
+        gt_masks = _ground_truth_to_mask(gt_mask_path, mask_size)
+
+        _ious = _calculate_ious(pred_masks, gt_masks)
+        ious.extend(_ious)
+    return ious
+
+def calculate_ious_json(labels_directory: Path, prediction_masks: dict = None, predictions_path: Path = None) -> list[float]:
     """
     Calculates the IOU for each prediction mask against its ground truth mask.
 
@@ -22,7 +48,7 @@ def calculate_ious(predictions_path: Path, labels_directory: Path) -> list[float
     :return: The IOUs for the prediction masks.
     """
     ious = []
-    prediction_masks = _get_masks_from_json_predictions(predictions_path)
+    prediction_masks = prediction_masks if prediction_masks else _get_masks_from_json_predictions(predictions_path)
 
     for image_id, pred_masks in prediction_masks.items():
         gt_mask_path = labels_directory / f"{format_image_id(image_id)}.txt"

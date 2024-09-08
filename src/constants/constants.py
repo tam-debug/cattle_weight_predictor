@@ -30,7 +30,7 @@ TRAINING_MODEL_PARAMS = {
 # Tune
 ITERATIONS = 300
 HYPERPARAM_ARGS = {
-    "epochs": [10, 100],
+    "epochs": [1, 3],
     "patience": 20,
     "batch": 30,
     "project": None,
