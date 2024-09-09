@@ -114,6 +114,7 @@ def show_mask(mask: np.ndarray):
     cv2.imshow("Output Mask", mask)
     cv2.waitKey(0)
 
+
 def resize_mask(masks: torch.tensor, height: int, width: int) -> np.ndarray:
     """
     Resizes the segmentation mask to the specified size.
@@ -123,4 +124,3 @@ def resize_mask(masks: torch.tensor, height: int, width: int) -> np.ndarray:
     ).squeeze(1)
     resized_masks_np = resized_masks.numpy()
     return resized_masks_np
-

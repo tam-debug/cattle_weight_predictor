@@ -62,24 +62,37 @@ class NumpyArrayEncoder(JSONEncoder):
         return JSONEncoder.default(self, obj)
 
 
-def load_dataset(file_path: Path) -> tuple[np.ndarray, np.ndarray]:
+def load_dataset(file_paths: list[Path]) -> tuple[np.ndarray, np.ndarray]:
     """
     Loads the depth masks and weight from the JSON file.
 
-    :param file_path: The file path to the JSON file.
+    :param file_paths: The file path to the JSON file.
     :return: The depth masks and weights in separate numpy arrays.
     """
 
-    raw_json = parse_json(file_path)
-    a = 1
-
     depth_masks, weights = [], []
-    for entry in raw_json:
-        depth_mask = np.array(entry["depth_mask"])
-        weight = entry["weight"][0]
 
-        depth_masks.append(depth_mask)
-        weights.append(weight)
+    for file_path in file_paths:
+        raw_json = parse_json(file_path)
+
+        _depth_masks, _weights = [], []
+        for entry in raw_json:
+            depth_mask = np.array(entry["depth_mask"])
+            weight = entry["weight"][0]
+
+            _depth_masks.append(depth_mask)
+            _weights.append(weight)
+
+        if len(weights) == 0:
+            weights = _weights
+            depth_masks.append(_depth_masks)
+        elif _weights != weights:
+            raise ValueError("Weights are not the same for all datasets.")
+        else:
+            depth_masks.append(_depth_masks)
+
+    if len(depth_masks) > 1:
+        depth_masks = np.stack(depth_masks, axis=0)
 
     return np.array(depth_masks), np.array(weights)
 
@@ -90,7 +103,7 @@ def generate_depth_masks(
     depth_image_dir: Path,
     weights_file: Path,
     save_json=False,
-    use_id_mapping=True
+    use_id_mapping=True,
 ) -> list[DepthMaskWeight]:
     """
     Generates the segmented depth masks and with the weights list.
@@ -118,7 +131,9 @@ def generate_depth_masks(
                     image_path=image_path, depth_image_dir=depth_image_dir
                 )
             )
-            resized_seg_masks = resize_mask(seg_masks, height=depth_frame.shape[0], width=depth_frame.shape[1])
+            resized_seg_masks = resize_mask(
+                seg_masks, height=depth_frame.shape[0], width=depth_frame.shape[1]
+            )
 
             id_mapping_file = image_path.with_suffix(".json")
 
@@ -143,11 +158,10 @@ def generate_depth_masks(
                 )
             )
             binary_mask = _seg_masks.masks[0]
-            depth_mask = _create_depth_mask(binary_mask=binary_mask, depth_frame=depth_frame)
-            depth_mappings.append(DepthMaskWeight(
-                depth_mask=depth_mask, weight=weight
-            ))
-
+            depth_mask = _create_depth_mask(
+                binary_mask=binary_mask, depth_frame=depth_frame
+            )
+            depth_mappings.append(DepthMaskWeight(depth_mask=depth_mask, weight=weight))
 
     if save_json:
         _save_depth_masks(depth_masks=depth_mappings)
@@ -155,7 +169,7 @@ def generate_depth_masks(
     return depth_mappings
 
 
-def _load_weights(weights_file) -> dict[str, int]:
+def _load_weights(weights_file) -> dict[str, float]:
     """
     Loads the weights file into a dictionary, with the key as the cattle ID
     """
@@ -167,7 +181,7 @@ def _load_weights(weights_file) -> dict[str, int]:
 
         for row in csv_reader:
             cattle_id = row["Name"]
-            weight = int(row["Weight"])
+            weight = float(row["Weight"])
             weights[cattle_id] = [weight]
     return weights
 
@@ -256,7 +270,7 @@ def _scale_coordinate(
     return scaled_y, scaled_x
 
 
-def _load_depth_frame(file_path: Union[str,Path]) -> np.ndarray:
+def _load_depth_frame(file_path: Union[str, Path]) -> np.ndarray:
     """
     Loads the depth image into a numpy array.
     """
@@ -313,6 +327,7 @@ def _create_depth_mask(binary_mask: np.ndarray, depth_frame: np.ndarray) -> np.n
 
     return padded_image
 
+
 def _scale_mask(mask: np.ndarray, dimension: int = SCALE_DIMENSION) -> np.ndarray:
     """
     Scales the mask to the given dimension but maintains the same aspect ratio.
@@ -331,7 +346,12 @@ def _scale_mask(mask: np.ndarray, dimension: int = SCALE_DIMENSION) -> np.ndarra
 
     return resized_mask
 
-def _pad_image(image: np.ndarray, height: int = DEPTH_MASK_DIMENSION[0], width: int = DEPTH_MASK_DIMENSION[1]) -> np.ndarray:
+
+def _pad_image(
+    image: np.ndarray,
+    height: int = DEPTH_MASK_DIMENSION[0],
+    width: int = DEPTH_MASK_DIMENSION[1],
+) -> np.ndarray:
     """
     Adds padding to the image so that it matches the specified height and width dimensions.
     """
