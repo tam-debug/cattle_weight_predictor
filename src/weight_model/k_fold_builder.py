@@ -74,21 +74,21 @@ def generate_dataset_folds(
 
 def load_dataset_folds(file_path: Path) -> list[DatasetFold]:
     """
-    Load dataset folds from a JSON file.
+    Load dataset folds from a .npz file.
     :param file_path: The path to the JSON file that contains the dataset folds.
     :return: The dataset folds.
     """
-    with open(file_path, "r") as json_file:
-        folds_data = json.load(json_file)
+    loaded_data = np.load(file_path)
+    num_folds = int(len(loaded_data) / 4)
 
     folds = []
-    for fold_data in folds_data:
+    for i in range(num_folds):
         folds.append(
             DatasetFold(
-                X_train=np.array(fold_data["X_train"]),
-                y_train=np.array(fold_data["y_train"]),
-                X_test=np.array(fold_data["X_test"]),
-                y_test=np.array(fold_data["y_test"]),
+                X_train=loaded_data[f"fold_{i}_X_train"],
+                y_train=loaded_data[f"fold_{i}_y_train"],
+                X_test=loaded_data[f"fold_{i}_X_test"],
+                y_test=loaded_data[f"fold_{i}_y_test"],
             )
         )
 
@@ -135,10 +135,10 @@ def _match_data_to_folds(
     dataset_folds = []
 
     for train_indices, test_indices in folds:
-        train_masks = X[:, train_indices]
+        train_masks = X[train_indices]
         train_weights = y[train_indices]
 
-        test_masks = X[:, test_indices]
+        test_masks = X[test_indices]
         test_weights = y[test_indices]
 
         dataset_folds.append(
@@ -165,21 +165,28 @@ def _match_data_to_folds(
 
 def _save_dataset_folds(dataset_folds: list[DatasetFold], file_path: Path):
     """
-    Save the dataset folds to a JSON file.
+    Save the dataset folds to a binary file.
     """
 
-    if file_path.suffix != ".json":
-        raise ValueError(f"Invalid JSON file suffix {file_path}")
+    if file_path.suffix != ".npz":
+        raise ValueError(f"File suffix should be .npz {file_path}")
 
-    folds_serializable = []
+    folds = []
     for fold in dataset_folds:
         fold_data = {
-            "X_train": fold.X_train.tolist(),
-            "y_train": fold.y_train.tolist(),
-            "X_test": fold.X_test.tolist(),
-            "y_test": fold.y_test.tolist(),
+            "X_train": fold.X_train,
+            "y_train": fold.y_train,
+            "X_test": fold.X_test,
+            "y_test": fold.y_test,
         }
-        folds_serializable.append(fold_data)
+        folds.append(fold_data)
 
-    with open(file_path, "w") as json_file:
-        json.dump(folds_serializable, json_file, indent=4)
+    with open(file_path, "wb") as f:
+        np.savez(
+            f,
+            **{
+                f"fold_{i}_{key}": arr
+                for i, d in enumerate(folds)
+                for key, arr in d.items()
+            },
+        )

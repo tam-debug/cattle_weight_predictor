@@ -92,9 +92,12 @@ def load_dataset(file_paths: list[Path]) -> tuple[np.ndarray, np.ndarray]:
             depth_masks.append(_depth_masks)
 
     if len(depth_masks) > 1:
-        depth_masks = np.stack(depth_masks, axis=0)
+        depth_masks = np.stack(depth_masks, axis=1)
+    else:
+        depth_masks = np.array(depth_masks)
+        depth_masks = depth_masks.transpose(1, 0, 2, 3)
 
-    return np.array(depth_masks), np.array(weights)
+    return depth_masks, np.array(weights)
 
 
 def generate_depth_masks(
