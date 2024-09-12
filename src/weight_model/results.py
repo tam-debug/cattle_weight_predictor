@@ -59,13 +59,32 @@ class ModelRunResults:
         :param file_path: The CSV file path to write to.
         """
         header = ["Actual", "Predicted"]
-        rows = np.column_stack((self.y_true, self.y_pred))
+        rows = np.column_stack((self.actual, self.predictions))
         write_csv_file(file_path=file_path, header=header, rows=rows)
 
+    def plot_actual_and_predicted_values(self, file_path: Path):
+        plt.figure(figsize=(8, 6))
 
-def plot_training_loss(loss: list[float], file_path: Path = None):
+        # Plot actual vs predicted values
+        plt.scatter(self.actual, self.predictions, color='blue', label='Predicted vs Actual')
+
+        # Plot a line of equality
+        plt.plot([min(self.actual), max(self.actual)], [min(self.actual), max(self.actual)], color='red', linestyle='--',
+                 label='Perfect Prediction')
+
+        plt.xlabel('Actual Values')
+        plt.ylabel('Predicted Values')
+        plt.title('Actual vs Predicted Values')
+        plt.legend()
+
+        plt.savefig(file_path)
+        plt.close()
+
+
+
+def plot_loss(loss: list[float], title: str, file_path: Path = None):
     """
-    Plots the training loss where it can be optionally saved.
+    Plots the loss where it can be optionally saved.
 
     :param loss: The loss values to plot.
     :param file_path: The file path to save the plot to.
@@ -73,8 +92,9 @@ def plot_training_loss(loss: list[float], file_path: Path = None):
     plt.plot(loss)
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
-    plt.title("Training Loss")
+    plt.title(title)
     if file_path:
         plt.savefig(file_path)
     else:
         plt.show()
+    plt.close()
