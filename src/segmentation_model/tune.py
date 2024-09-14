@@ -17,7 +17,7 @@ from constants.constants import (
     DATA_AUGMENT_ARGS,
     ITERATIONS,
 )
-from segmentation_model.train import train, validate
+from segmentation_model.train import train, validate, write_training_results
 from utils.utils import get_yaml_files, get_current_timestamp, write_csv_file
 from constants.constants import (
     TUNE_TRAIN_RESULTS_HEADER,
@@ -67,6 +67,7 @@ class TuneTestingResults:
 
 def tune(
     data_path: Path,
+    ds_yamls: list[Path],
     model_file_path: str,
     project_path: Path,
     iterations: int = ITERATIONS,
@@ -81,7 +82,6 @@ def tune(
     :param project_path: The path to store the results.
     :param iterations: The number of iterations to tune for.
     """
-    ds_yamls = get_yaml_files(data_path / "train")
     train_results = train_iterations(
         ds_yamls=ds_yamls,
         iterations=iterations,
@@ -91,7 +91,6 @@ def tune(
 
     iteration_dir = project_path / f"iter{train_results.best_model_index}"
     with_head_flag = "Y" if "without_head" not in data_path.as_posix() else "N"
-    with_head_flags = [with_head_flag for i in range(iterations)]
 
     write_csv_file(
         file_path=project_path / TUNE_TRAIN_RESULTS_FILENAME,
@@ -100,7 +99,7 @@ def tune(
             zip(
                 train_results.timestamps,
                 [model_file_path for i in range(iterations)],
-                with_head_flags,
+                [with_head_flag for i in range(iterations)],
                 train_results.mean_ious,
                 train_results.std_ious,
             )
@@ -118,7 +117,7 @@ def tune(
         rows=list(
             zip(
                 test_results.timestamps,
-                with_head_flags,
+                [with_head_flag for i in range(len(ds_yamls))],
                 [test_results.model_path for i in range(len(test_results.timestamps))],
                 test_results.test_fold_ious,
                 test_results.test_fold_stds,
@@ -165,7 +164,7 @@ def train_iterations(
     :param model_file_path: The path to the model.
     :return: The results training the different iterations.
     """
-    hyperparam_grid = _get_hyperparam_grid()
+    hyperparam_grid = get_hyperparam_grid()
     model_number, best_iou = 0, 0
 
     fold_ious, fold_stds = [], []
@@ -182,8 +181,12 @@ def train_iterations(
             model_kwargs=random_hyperparams,
             run_test=False,
         )
-        fold_iou = np.mean(training_results.val_ious)
-        fold_std = np.std(training_results.val_ious, ddof=1)
+        write_training_results(
+            file_path=project_path / f"iter{i}/training_results.csv",
+            training_results=training_results
+        )
+        fold_iou = np.mean(training_results.val_fold_ious)
+        fold_std = np.mean(training_results.val_fold_stds)
 
         fold_ious.append(fold_iou)
         fold_stds.append(fold_std)
@@ -210,22 +213,23 @@ def test_iteration(iteration_dir: Path, labels_directory: Path, images_directory
     test_results = TuneTestingResults(model_path=iteration_dir.as_posix())
 
     for train_path in os.listdir(iteration_dir):
-        test_results.timestamps.append(get_current_timestamp())
-        _test_ious = validate(
-            model=YOLO(f"{iteration_dir.as_posix()}/{train_path}/weights/best.pt"),
-            project=iteration_dir / Path(train_path),
-            name="test",
-            labels_directory=labels_directory,
-            input_directory=images_directory
-        )
-        test_results.test_fold_ious.append(np.mean(_test_ious))
-        test_results.test_fold_stds.append(np.std(_test_ious, ddof=1))
-        test_results.test_ious.extend(_test_ious)
+        if os.path.isdir(f"{iteration_dir.as_posix()}/{train_path}"):
+            test_results.timestamps.append(get_current_timestamp())
+            _test_ious = validate(
+                model=YOLO(f"{iteration_dir.as_posix()}/{train_path}/weights/best.pt"),
+                project=iteration_dir / Path(train_path),
+                name="test",
+                labels_directory=labels_directory,
+                input_directory=images_directory
+            )
+            test_results.test_fold_ious.append(np.mean(_test_ious))
+            test_results.test_fold_stds.append(np.std(_test_ious, ddof=1))
+            test_results.test_ious.extend(_test_ious)
 
     return test_results
 
 
-def _get_hyperparam_grid() -> dict:
+def get_hyperparam_grid() -> dict:
     """
     Gets hyperparameters and data augmentation ranges.
     """

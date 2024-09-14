@@ -28,8 +28,6 @@ def calculate_ious(labels_directory: Path, prediction_results: list[PredictionRe
     ious = []
 
     for prediction_result in prediction_results:
-        if prediction_result.image_id == "00342":
-            a = 1
         pred_masks = prediction_result.masks
         mask_size = pred_masks[0].shape if len(pred_masks) > 0 else prediction_result.mask_size
         gt_mask_path = labels_directory / f"{prediction_result.image_id}.txt"

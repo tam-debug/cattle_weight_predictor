@@ -162,3 +162,9 @@ def colour_depth_maps(directory: Path, save_dir: Path):
 
         # Display the result
         cv2.imwrite(save_dir / f"{i}.png", colored_depth_map)
+
+
+def load_numpy_array_file(file_path: Path) -> np.ndarray:
+    if file_path.suffix != ".npy":
+        raise ValueError(f"Invalid .npy suffix {file_path}")
+    return np.load(file_path)

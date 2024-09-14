@@ -41,6 +41,31 @@ class TrainingResults:
         self.test_fold_ious = []
         self.test_fold_stds = []
 
+def train_no_k_fold(ds_yaml: Path, model_path: str, model_kwargs: dict, test_dir: Path = None):
+
+    model = YOLO(model_path)
+    train_res = model.train(data=ds_yaml, **model_kwargs)
+
+    timestamp = get_current_timestamp()
+    _test_ious = validate(
+        model=model,
+        project=train_res.save_dir,
+        name="test",
+        input_directory=test_dir / "images",
+        labels_directory=test_dir / "labels"
+    )
+    with_head_flag = "with_head" in ds_yaml.as_posix()
+    header = ["Timestamp", "With Head", "Model", "Test Mean IOU", "Test StDev IOU"]
+    rows = [[
+        timestamp, with_head_flag, model_path, np.mean(_test_ious), np.std(_test_ious, ddof=1)
+    ]]
+
+    write_csv_file(
+        file_path=(Path(model_kwargs["project"])) / "test_results.csv",
+        header=header,
+        rows=rows
+    )
+
 
 def train(
     ds_yamls: list[Path], model_path: str, model_kwargs: dict, run_test: bool = True
@@ -78,9 +103,11 @@ def train(
             training_results.val_ious.extend(_val_ious)
             training_results.val_fold_ious.append(np.mean(_val_ious))
             training_results.val_fold_stds.append(np.std(_val_ious, ddof=1))
+            logger.info(f"Mean IOU: {np.mean(_val_ious)} Standard Deviation: {np.std(_val_ious, ddof=1)}")
         else:
             training_results.val_fold_ious.append(0)
             training_results.val_fold_stds.append(0)
+            logger.info(f"Mean IOU: 0 Standard Deviation: 0")
 
         if run_test:
             _test_ious = validate(
@@ -115,15 +142,35 @@ def write_training_results(file_path: Path, training_results: TrainingResults):
     model_path_column = [
         training_results.model_path for i in range(len(training_results.timestamps))
     ]
-    rows = list(
-        zip(
-            training_results.timestamps,
-            model_path_column,
-            training_results.val_fold_ious,
-            training_results.val_fold_stds,
-            training_results.test_fold_ious,
-            training_results.test_fold_stds,
-        )
-    )
 
-    write_csv_file(file_path=file_path, header=TRAINING_RESULTS_HEADER, rows=rows)
+    if len(training_results.test_fold_ious) > 0:
+        rows = list(
+            zip(
+                training_results.timestamps,
+                model_path_column,
+                training_results.val_fold_ious,
+                training_results.val_fold_stds,
+                training_results.test_fold_ious,
+                training_results.test_fold_stds,
+            )
+        )
+
+        write_csv_file(file_path=file_path, header=TRAINING_RESULTS_HEADER, rows=rows)
+    else:
+        no_test_header = [
+            "Timestamp",
+            "Model Path",
+            "Val Fold Mean IOU",
+            "Val Fold StdDev IOU",
+            "Test Fold Mean IOU",
+            "Test Fold StdDev IOU",
+        ]
+        rows = list(
+            zip(
+                training_results.timestamps,
+                model_path_column,
+                training_results.val_fold_ious,
+                training_results.val_fold_stds,
+            )
+        )
+        write_csv_file(file_path=file_path, header=no_test_header, rows=rows)
