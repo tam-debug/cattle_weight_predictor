@@ -1,7 +1,7 @@
 """
 Generates the segmentation masks from the segmentation model.
 """
-
+import os.path
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,7 +16,7 @@ class ImageSegmentationMasks:
     original_hw: tuple[int, int]
 
 def generate_masks(
-    model_path: str, images: Union[Path, list[Path]]
+    model_path: str, images: Union[Path, list[Path]], project: Path = None, name: str = None, save_tensors: bool = False
 ) -> dict[Path, ImageSegmentationMasks]:
     """
     Generates the segmentation masks for the given images.
@@ -28,7 +28,7 @@ def generate_masks(
     :return: The image path, and its corresponding segmentation masks.
     """
     image_masks = {}
-    prediction_results = predict(model_path, images)
+    prediction_results = predict(model_path, images, project=project, name=name)
     for result in prediction_results:
         image_path = Path(result.path)
         masks = result.masks.data
@@ -37,15 +37,43 @@ def generate_masks(
         seg_masks = ImageSegmentationMasks(masks, original_hw)
         image_masks[image_path] = seg_masks
 
-        # if image_masks.get(image_path) is None:
-        # else:
-        #     for i in range(masks):
-        #         image_masks[image_path].append(seg_masks)
+    if save_tensors:
+        _save_seg_masks(
+            project=project / name,
+            masks=image_masks
+        )
 
     return image_masks
 
+def load_seg_mask_tensors(tensor_dir: Path) -> dict[Path, ImageSegmentationMasks]:
+    image_masks = {}
 
-def predict(model_path: str, source: Union[Path, list[Path]]) -> list[Results]:
+    for tensor_path in os.listdir(tensor_dir):
+        raw = torch.load(tensor_dir / tensor_path)
+
+        image_masks[Path(tensor_path).stem] = ImageSegmentationMasks(
+            masks=raw["masks"],
+            original_hw=raw["original_hw"]
+        )
+
+    return image_masks
+
+def _save_seg_masks(project: Path, masks: dict[Path, ImageSegmentationMasks]):
+
+    save_dir = project / "tensors"
+
+    if not os.path.exists(save_dir):
+        os.mkdir(save_dir)
+
+    for image_path, image_seg_masks in masks.items():
+        save_path = save_dir / f"{image_path.stem}.pt"
+        torch.save({
+            "masks": image_seg_masks.masks,
+            "original_hw": image_seg_masks.original_hw
+        }, save_path)
+
+
+def predict(model_path: str, source: Union[Path, list[Path]], project: Path = None, name: str = None) -> list[Results]:
     """
     Generates segmentation masks for the given image using the given model.
 
@@ -54,7 +82,10 @@ def predict(model_path: str, source: Union[Path, list[Path]]) -> list[Results]:
     :return: List of the results, of which the segmentation masks are stored.
     """
     model = YOLO(model_path)
-    results = model.predict(source)
+    if project:
+        results = model.predict(source=source, project=project, name=name, save=True)
+    else:
+        results = model.predict(source)
     return results
 
 

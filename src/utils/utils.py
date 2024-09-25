@@ -113,6 +113,8 @@ def show_mask(mask: np.ndarray):
     """
     cv2.imshow("Output Mask", mask)
     cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    cv2.waitKey(1)
 
 
 def resize_mask(masks: torch.tensor, height: int, width: int) -> np.ndarray:
@@ -122,5 +124,5 @@ def resize_mask(masks: torch.tensor, height: int, width: int) -> np.ndarray:
     resized_masks = torch.nn.functional.interpolate(
         masks.unsqueeze(1), size=(height, width), mode="nearest"
     ).squeeze(1)
-    resized_masks_np = resized_masks.numpy()
+    resized_masks_np = resized_masks.cpu().numpy()
     return resized_masks_np

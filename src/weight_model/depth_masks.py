@@ -14,7 +14,7 @@ from typing import Union
 import numpy as np
 
 from constants.constants import SCALE_DIMENSION, DEPTH_MASK_DIMENSION
-from segmentation_model.generate_masks import generate_masks
+from segmentation_model.generate_masks import generate_masks, load_seg_mask_tensors
 from utils.utils import parse_json, resize_mask, show_mask
 
 logger = logging.getLogger(__name__)
@@ -73,15 +73,9 @@ def load_dataset(file_paths: list[Path]) -> tuple[np.ndarray, np.ndarray]:
     depth_masks, weights = [], []
 
     for file_path in file_paths:
-        raw_json = parse_json(file_path)
-
-        _depth_masks, _weights = [], []
-        for entry in raw_json:
-            depth_mask = np.array(entry["depth_mask"])
-            weight = entry["weight"][0]
-
-            _depth_masks.append(depth_mask)
-            _weights.append(weight)
+        data = np.load(file_path, allow_pickle=True)
+        _depth_masks = data['depth_masks']
+        _weights = data['weights']
 
         if len(weights) == 0:
             weights = _weights
@@ -105,8 +99,9 @@ def generate_depth_masks(
     rgb_image_dir: Path,
     depth_image_dir: Path,
     weights_file: Path,
-    save_json=False,
-    use_id_mapping=True,
+    save_dir: Path = None,
+    id_mapping_dir: Path = None,
+    seg_mask_dir: Path = None
 ) -> list[DepthMaskWeight]:
     """
     Generates the segmented depth masks and with the weights list.
@@ -117,16 +112,16 @@ def generate_depth_masks(
     :param rgb_image_dir: The directory that stores the RGB images.
     :param depth_image_dir: The directory that stores the depth images.
     :param weights_file: The file path that contains the weights for each cattle ID.
-    :param save_json: Whether to save the generated depth masks in a JSON file.
+    :param save_numpy: Whether to save the generated depth masks in a JSON file.
     :return: The depth masks and weights lists.
     """
 
-    seg_masks = generate_masks(seg_model, rgb_image_dir)
+    seg_masks = load_seg_mask_tensors(seg_mask_dir) if seg_mask_dir else generate_masks(seg_model, rgb_image_dir)
     weights = _load_weights(weights_file)
 
     depth_mappings = []
 
-    if use_id_mapping:
+    if id_mapping_dir:
         for image_path, _seg_masks in seg_masks.items():
             seg_masks = _seg_masks.masks
             depth_frame = _load_depth_frame(
@@ -138,7 +133,7 @@ def generate_depth_masks(
                 seg_masks, height=depth_frame.shape[0], width=depth_frame.shape[1]
             )
 
-            id_mapping_file = image_path.with_suffix(".json")
+            id_mapping_file = id_mapping_dir / f"{image_path}.json"
 
             seg_mappings = _match_mask_to_weight(
                 seg_masks=resized_seg_masks,
@@ -154,7 +149,7 @@ def generate_depth_masks(
 
     else:
         for image_path, _seg_masks in seg_masks.items():
-            weight = weights[image_path.stem]
+            weight = weights[image_path]
             depth_frame = _load_depth_frame(
                 file_path=_get_depth_image_name(
                     image_path=image_path, depth_image_dir=depth_image_dir
@@ -166,8 +161,8 @@ def generate_depth_masks(
             )
             depth_mappings.append(DepthMaskWeight(depth_mask=depth_mask, weight=weight))
 
-    if save_json:
-        _save_depth_masks(depth_masks=depth_mappings)
+    if save_dir:
+        _save_depth_masks(depth_mappings=depth_mappings, file_path=save_dir)
 
     return depth_mappings
 
@@ -189,11 +184,11 @@ def _load_weights(weights_file) -> dict[str, float]:
     return weights
 
 
-def _get_depth_image_name(image_path: Path, depth_image_dir: Path):
+def _get_depth_image_name(image_path: str, depth_image_dir: Path):
     """
     Gets the depth image name.
     """
-    return depth_image_dir / f"{image_path.stem}.png"
+    return depth_image_dir / f"{image_path}.png"
 
 
 def _match_mask_to_weight(
@@ -298,7 +293,7 @@ def _create_depth_masks(
         depth_masks.append(
             DepthMaskWeight(depth_mask=depth_mask, weight=seg_mapping.weight)
         )
-        show_mask(depth_mask)
+        # show_mask(depth_mask)
 
     return depth_masks
 
@@ -379,14 +374,10 @@ def _pad_image(
     return padded_image
 
 
-def _save_depth_masks(depth_masks: list[DepthMaskWeight]):
+def _save_depth_masks(depth_mappings: list[DepthMaskWeight], file_path: Path):
     """
     Saves depth masks to a JSON file called "depth_masks.json"
     """
-
-    data = [
-        {"depth_mask": depth_mask.depth_mask, "weight": depth_mask.weight}
-        for depth_mask in depth_masks
-    ]
-    with open("depth_masks.json", "w") as json_file:
-        json.dump(data, json_file, indent=4, cls=NumpyArrayEncoder)
+    depth_masks = [obj.depth_mask for obj in depth_mappings]
+    weights = [obj.weight for obj in depth_mappings]
+    np.savez(file_path, depth_masks=depth_masks, weights=weights)
