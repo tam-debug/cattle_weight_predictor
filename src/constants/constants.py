@@ -93,7 +93,6 @@ TRANSFORM_TRAIN = v2.Compose(
 TRANSFORM_TEST = v2.Compose(
     [v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
 )
-PYTORCH_REPO = "pytorch/vision:v0.10.0"
 
 # Weight filenames
 TRAIN_LOSS_PLOT_FILENAME = "train_loss_plot.png"

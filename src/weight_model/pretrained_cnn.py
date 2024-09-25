@@ -7,6 +7,8 @@ from dataclasses import dataclass
 import os
 import logging
 from pathlib import Path
+
+import torchvision.models
 import yaml
 
 import numpy as np
@@ -14,7 +16,6 @@ import torch
 import torch.nn as nn
 from torchvision.transforms import v2
 
-from torchvision.models.resnet import ResNet18_Weights
 from torch.utils.data import DataLoader, Dataset
 
 from constants.constants import (
@@ -22,7 +23,6 @@ from constants.constants import (
     TRANSFORM_TEST,
     TRAIN_LOSS_PLOT_FILENAME,
     VAL_LOSS_PLOT_FILENAME,
-    PYTORCH_REPO,
     VAL_PREDICTIONS,
     VAL_METRICS,
 )
@@ -32,8 +32,11 @@ from utils.utils import write_csv_file
 
 logger = logging.getLogger(__name__)
 
+
 class EarlyStopping:
-    def __init__(self, patience=10, verbose=False, delta=0.0, path=Path('checkpoint.pth')):
+    def __init__(
+        self, patience=10, verbose=False, delta=0.0, path=Path("checkpoint.pth")
+    ):
         self.patience = patience
         self.verbose = verbose
         self.delta = delta
@@ -41,7 +44,7 @@ class EarlyStopping:
         self.counter = 0
         self.best_score = None
         self.early_stop = False
-        self.val_loss_min = float('inf')
+        self.val_loss_min = float("inf")
 
     def __call__(self, val_loss, model):
         score = -val_loss
@@ -61,9 +64,12 @@ class EarlyStopping:
 
     def save_checkpoint(self, val_loss, model):
         if self.verbose:
-            print(f"Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...")
+            print(
+                f"Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ..."
+            )
         torch.save(model.state_dict(), self.path)
         self.val_loss_min = val_loss
+
 
 class CustomDataset(Dataset):
     """
@@ -85,7 +91,9 @@ class CustomDataset(Dataset):
         if self.transform:
             x = self.transform(x)
 
-        return x, _y.clone().detach().to(torch.float32) #torch.tensor(_y, dtype=torch.float32)
+        return x, _y.clone().detach().to(
+            torch.float32
+        )  # torch.tensor(_y, dtype=torch.float32)
 
 
 @dataclass
@@ -97,6 +105,7 @@ class TrainingResults:
         self.training_loss = []
         self.validation_loss = []
         self.model = model
+
 
 def run_resnet_18_folds(data_path: Path, results_dir: Path):
     """
@@ -122,11 +131,9 @@ def run_resnet_18_folds(data_path: Path, results_dir: Path):
             y_train=dataset.y_train,
             X_test=dataset.X_test,
             y_test=dataset.y_test,
-            results_dir=fold_results_dir
+            results_dir=fold_results_dir,
         )
-        metrics.append([
-            results.mae, results.mape, results.rmse, results.r2_score
-        ])
+        metrics.append([results.mae, results.mape, results.rmse, results.r2_score])
 
     metrics = np.array(metrics)
 
@@ -137,11 +144,7 @@ def run_resnet_18_folds(data_path: Path, results_dir: Path):
     metrics.append(metric_average.tolist())
     metrics.append(metric_std.tolist())
 
-    write_csv_file(
-        results_dir/summary_filename,
-        header=header,
-        rows=metrics
-    )
+    write_csv_file(results_dir / summary_filename, header=header, rows=metrics)
 
 
 def run_pretrained(
@@ -157,7 +160,7 @@ def run_pretrained(
     delta: float,
     lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
     results_dir: Path,
-    model_name: str
+    model_name: str,
 ) -> tuple[torch.nn.Module, ModelRunResults]:
     """
     Run the pretrained pytorch model.
@@ -186,7 +189,7 @@ def run_pretrained(
         patience=patience,
         delta=delta,
         lr_scheduler=lr_scheduler,
-        results_dir=results_dir
+        results_dir=results_dir,
     )
 
     train_loader = _prepare_data(
@@ -196,9 +199,7 @@ def run_pretrained(
         X=X_test, y=y_test, transform=TRANSFORM_TEST, shuffle=False
     )
     early_stopping = EarlyStopping(
-        patience=patience,
-        delta=delta,
-        path=results_dir / "checkpoint.pth"
+        patience=patience, delta=delta, path=results_dir / "checkpoint.pth"
     )
 
     training_results = _train(
@@ -209,11 +210,19 @@ def run_pretrained(
         loss_function=loss_function,
         epochs=epochs,
         early_stopping=early_stopping,
-        lr_scheduler=lr_scheduler
+        lr_scheduler=lr_scheduler,
     )
 
-    plot_loss(training_results.training_loss, title="Training Loss", file_path=results_dir / TRAIN_LOSS_PLOT_FILENAME)
-    plot_loss(training_results.validation_loss, title="Validation Loss", file_path=results_dir / VAL_LOSS_PLOT_FILENAME)
+    plot_loss(
+        training_results.training_loss,
+        title="Training Loss",
+        file_path=results_dir / TRAIN_LOSS_PLOT_FILENAME,
+    )
+    plot_loss(
+        training_results.validation_loss,
+        title="Validation Loss",
+        file_path=results_dir / VAL_LOSS_PLOT_FILENAME,
+    )
 
     model.load_state_dict(torch.load(early_stopping.path))
 
@@ -222,7 +231,9 @@ def run_pretrained(
     metrics = ModelRunResults(y_true=y_test, y_pred=predictions)
     metrics.write_predictions(file_path=results_dir / VAL_PREDICTIONS)
     metrics.write_metrics(file_path=results_dir / VAL_METRICS)
-    metrics.plot_actual_and_predicted_values(file_path=results_dir / "actual_vs_predicted.png")
+    metrics.plot_actual_and_predicted_values(
+        file_path=results_dir / "actual_vs_predicted.png"
+    )
     metrics.print()
 
     return model, metrics
@@ -241,9 +252,8 @@ def run_resnet_18(
     :param results_dir: The directory where the results will be stored.
     :return: The model and the metrics.
     """
-    resnet_number = 18
-    model_name = f"resnet{resnet_number}"
-    model = _load_resnet(resnet_number=resnet_number)
+    model_name = f"resnet18"
+    model = _load_resnet()
 
     loss_function = nn.MSELoss()
     initial_lr = 0.001
@@ -266,26 +276,34 @@ def run_resnet_18(
         model_name=model_name,
         patience=patience,
         delta=delta,
-        lr_scheduler=lr_scheduler
+        lr_scheduler=lr_scheduler,
     )
 
 
-def _load_resnet(resnet_number: int) -> nn.Module:
+def _load_resnet() -> nn.Module:
     """
     Load the ResNet model for regression.
-    Modified the final fully connected layer to output a vector of size 128 (or any desired size)
+    Modified the final fully connected layer to a dense layer.
     """
-    model = torch.hub.load(
-        PYTORCH_REPO,
-        f"resnet{resnet_number}",
-        weights=ResNet18_Weights.IMAGENET1K_V1,
-    )
+    model = torchvision.models.resnet18(pretrained=True)
 
-    model.fc = nn.Sequential(
-        nn.Linear(model.fc.in_features, 128),  # Dense layer with 128 units
-        nn.ReLU(),  # Activation function
-        nn.Linear(128, 1),  # Final layer with single output
-    )
+    model.fc = nn.Linear(model.fc.in_features, 128)
+    # model.fc = nn.Sequential(
+    #     nn.Linear(model.fc.in_features, 128),  # Dense layer with 128 units
+    #     nn.ReLU(),  # Activation function
+    #     nn.Linear(128, 1),  # Final layer with single output
+    # )
+    logger.info(model.eval())
+    return model
+
+
+def _load_efficientnet() -> nn.Module:
+    """
+    Load the ResNet model for regression.
+    Modified the final fully connected layer to have a dense layer instead.
+    """
+    model = torchvision.models.efficientnet_b0(pretrained=True)
+    model.fc = nn.Linear(model.fc.in_features, 1)
     logger.info(model.eval())
     return model
 
@@ -412,12 +430,25 @@ def _test(model: torch.nn.Module, test_loader: DataLoader) -> np.ndarray:
     logger.info(predictions)
     return predictions
 
-def _save_run_args(model_name: str, optimiser: torch.optim.Optimizer, loss_function, lr_scheduler: torch.optim.lr_scheduler.LRScheduler, epochs: int, results_dir: Path, patience: int, delta: float):
+
+def _save_run_args(
+    model_name: str,
+    optimiser: torch.optim.Optimizer,
+    loss_function,
+    lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
+    epochs: int,
+    results_dir: Path,
+    patience: int,
+    delta: float,
+):
+    """
+    Save the model run arguments in a YAML file.
+    """
 
     optimiser_info = {
-        'optimiser_type': optimiser.__class__.__name__,
-        'learning_rate': optimiser.param_groups[0]['lr'],
-        'weight_decay': optimiser.param_groups[0].get('weight_decay'),
+        "optimiser_type": optimiser.__class__.__name__,
+        "learning_rate": optimiser.param_groups[0]["lr"],
+        "weight_decay": optimiser.param_groups[0].get("weight_decay"),
         "momentum": optimiser.param_groups[0].get("momentum"),
     }
 
@@ -429,7 +460,7 @@ def _save_run_args(model_name: str, optimiser: torch.optim.Optimizer, loss_funct
         "save_dir": results_dir.as_posix(),
         "patience": patience,
         "delta": delta,
-        "lr_scheduler": lr_scheduler.state_dict()
+        "lr_scheduler": lr_scheduler.state_dict(),
     }
 
     with open(results_dir / "run_args.yaml", "w") as file:

@@ -61,7 +61,7 @@ def generate_dataset_folds(
     :param output_json_file: The output JSON file to store the dataset folds.
     :return: The dataset folds.
     """
-    folds = _load_folds_configuration(json_file_path=folds_json_path)
+    folds = load_folds_configuration(json_file_path=folds_json_path)
 
     depth_masks, weights = load_dataset(data_paths)
 
@@ -102,7 +102,7 @@ def load_dataset_folds(file_path: Path) -> list[DatasetFold]:
     return folds
 
 
-def _load_folds_configuration(
+def load_folds_configuration(
     json_file_path: Path,
 ) -> list[tuple[np.ndarray, np.ndarray]]:
     """
