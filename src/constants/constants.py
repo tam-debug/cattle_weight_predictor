@@ -79,20 +79,6 @@ LABELS_DIR_WITHOUT_HEAD = "labels/cattle_without_head"
 # Weight model dataset
 SCALE_DIMENSION = 640
 DEPTH_MASK_DIMENSION = (640, 640)  # Height, Width
-TRANSFORM_TRAIN = v2.Compose(
-    [
-        v2.RandomHorizontalFlip(0.5),
-        v2.RandomVerticalFlip(0.5),
-        v2.RandomRotation(30),
-        v2.RandomResizedCrop(size=(224, 224), scale=(0.8, 1.0)),
-        v2.RandomAffine(20),
-        v2.RandomPerspective(),
-        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ]
-)
-TRANSFORM_TEST = v2.Compose(
-    [v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
-)
 
 # Weight filenames
 TRAIN_LOSS_PLOT_FILENAME = "train_loss_plot.png"
