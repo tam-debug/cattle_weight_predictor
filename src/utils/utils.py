@@ -126,3 +126,20 @@ def resize_mask(masks: torch.tensor, height: int, width: int) -> np.ndarray:
     ).squeeze(1)
     resized_masks_np = resized_masks.cpu().numpy()
     return resized_masks_np
+
+def colour_depth_maps(directory: Path, save_dir: Path):
+
+    for i in range(1, 104):
+
+        depth_map = cv2.imread(directory / f"{i}.png", cv2.IMREAD_GRAYSCALE)
+        # Normalize the depth map to the range [0, 255]
+        depth_map_normalized = cv2.normalize(depth_map, None, 0, 255, cv2.NORM_MINMAX)
+
+        # Convert to 8-bit
+        depth_map_normalized = depth_map_normalized.astype(np.uint8)
+
+        # Apply a color map
+        colored_depth_map = cv2.applyColorMap(depth_map_normalized, cv2.COLORMAP_JET)
+
+        # Display the result
+        cv2.imwrite(save_dir / f"{i}.png", colored_depth_map)
