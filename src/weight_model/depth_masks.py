@@ -12,9 +12,11 @@ from pathlib import Path
 from typing import Union
 
 import numpy as np
+import torch
 
 from constants.constants import SCALE_DIMENSION, DEPTH_MASK_DIMENSION
-from segmentation_model.generate_masks import generate_masks, load_seg_mask_tensors
+from segmentation_model.generate_masks import generate_masks, load_seg_mask_tensors, load_prelabel_masks
+from segmentation_model.dataset_builder.resize_rgb import transform_id_coordinates, RgbTransformParams
 from utils.utils import parse_json, resize_mask, show_mask
 
 logger = logging.getLogger(__name__)
@@ -80,7 +82,7 @@ def load_dataset(file_paths: list[Path]) -> tuple[np.ndarray, np.ndarray]:
         if len(weights) == 0:
             weights = _weights
             depth_masks.append(_depth_masks)
-        elif _weights != weights:
+        elif not np.array_equal(_weights, weights):
             raise ValueError("Weights are not the same for all datasets.")
         else:
             depth_masks.append(_depth_masks)
@@ -99,9 +101,13 @@ def generate_depth_masks(
     rgb_image_dir: Path,
     depth_image_dir: Path,
     weights_file: Path,
+    start_num: int,
+    end_num: int,
+    rgb_transform_params: RgbTransformParams,
     save_dir: Path = None,
     id_mapping_dir: Path = None,
-    seg_mask_dir: Path = None
+    seg_mask_dir: Path = None,
+    prelabel_mask_dir: Path = None
 ) -> list[DepthMaskWeight]:
     """
     Generates the segmented depth masks and with the weights list.
@@ -115,31 +121,37 @@ def generate_depth_masks(
     :param save_numpy: Whether to save the generated depth masks in a JSON file.
     :return: The depth masks and weights lists.
     """
+    if prelabel_mask_dir:
+        seg_masks = load_prelabel_masks(prelabel_mask_dir, start_num=start_num, end_num=end_num)
+    elif seg_mask_dir:
+        seg_masks = load_seg_mask_tensors(seg_mask_dir, start_num=start_num, end_num=end_num)
+    else:
+        seg_masks = generate_masks(seg_model, rgb_image_dir)
 
-    seg_masks = load_seg_mask_tensors(seg_mask_dir) if seg_mask_dir else generate_masks(seg_model, rgb_image_dir)
     weights = _load_weights(weights_file)
 
     depth_mappings = []
 
     if id_mapping_dir:
-        for image_path, _seg_masks in seg_masks.items():
+        for image_number, _seg_masks in seg_masks.items():
             seg_masks = _seg_masks.masks
             depth_frame = _load_depth_frame(
                 file_path=_get_depth_image_name(
-                    image_path=image_path, depth_image_dir=depth_image_dir
+                    image_path=image_number, depth_image_dir=depth_image_dir
                 )
             )
             resized_seg_masks = resize_mask(
                 seg_masks, height=depth_frame.shape[0], width=depth_frame.shape[1]
             )
 
-            id_mapping_file = id_mapping_dir / f"{image_path}.json"
+            id_mapping_file = id_mapping_dir / f"{image_number}.json"
 
             seg_mappings = _match_mask_to_weight(
                 seg_masks=resized_seg_masks,
                 weights=weights,
                 id_mapping_file=id_mapping_file,
                 original_scale=_seg_masks.original_hw,
+                rgb_transform_params=rgb_transform_params
             )
 
             _depth_mappings = _create_depth_masks(
@@ -148,17 +160,18 @@ def generate_depth_masks(
             depth_mappings.extend(_depth_mappings)
 
     else:
-        for image_path, _seg_masks in seg_masks.items():
-            weight = weights[image_path]
+        for image_number, _seg_masks in seg_masks.items():
+            weight = weights[str(image_number)]
             depth_frame = _load_depth_frame(
                 file_path=_get_depth_image_name(
-                    image_path=image_path, depth_image_dir=depth_image_dir
+                    image_path=image_number, depth_image_dir=depth_image_dir
                 )
             )
-            binary_mask = _seg_masks.masks[0]
+            binary_mask = _seg_masks.masks[0].cpu().numpy()
             depth_mask = _create_depth_mask(
                 binary_mask=binary_mask, depth_frame=depth_frame
             )
+            show_mask(depth_mask)
             depth_mappings.append(DepthMaskWeight(depth_mask=depth_mask, weight=weight))
 
     if save_dir:
@@ -195,7 +208,8 @@ def _match_mask_to_weight(
     seg_masks: list[np.ndarray],
     weights: dict[str, int],
     id_mapping_file: Path,
-    original_scale: [int, int] = None,
+    rgb_transform_params: RgbTransformParams,
+    original_scale: [int, int],
 ) -> list[SegMaskWeight]:
     """
     Finds the weight corresponding to each segmentation mask by using coordinates and IDs in the ID mapping file.
@@ -209,14 +223,16 @@ def _match_mask_to_weight(
     for mask in seg_masks:
         for id_mapping in id_mappings:
             cattle_id = id_mapping.id
-            if original_scale is not None:
-                map_y, map_x = _scale_coordinate(
-                    coordinate=(id_mapping.y, id_mapping.x),
-                    original_scale=original_scale,
-                    new_scale=mask.shape[:2],
-                )
-            else:
-                map_y, map_x = id_mapping.y, id_mapping.x
+            id_x, id_y = transform_id_coordinates(
+                x_original=id_mapping.x,
+                y_original=id_mapping.y,
+                transform_params=rgb_transform_params,
+            )
+            map_y, map_x = _scale_coordinate(
+                coordinate=(id_y, id_x),
+                original_scale=(rgb_transform_params.target_height, rgb_transform_params.target_width),
+                new_scale=mask.shape[:2],
+            )
 
             if cattle_id not in matched_ids and mask[map_y][map_x] == 1:
                 matched_ids.add(cattle_id)
@@ -242,6 +258,7 @@ def _load_id_mapping(file_path: Path) -> list[IdMapping]:
                 point = points[0]
                 if len(point) != 2:
                     raise ValueError(f"Should be a x and y coordinate and not {points}")
+
                 id_mappings.append(
                     IdMapping(
                         x=int(point[0]), y=int(point[1]), id=str(shape["group_id"])

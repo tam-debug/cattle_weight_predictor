@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import os
 import logging
 from pathlib import Path
+from typing import Optional
 
 import torchvision.models
 import yaml
@@ -26,8 +27,9 @@ from constants.constants import (
     VAL_PREDICTIONS,
     VAL_METRICS,
 )
-from weight_model.results import ModelRunResults, plot_loss
+from weight_model.custom_model import CNNModel
 from weight_model.k_fold_builder import load_dataset_folds
+from weight_model.results import ModelRunResults, plot_loss
 from utils.utils import write_csv_file
 
 logger = logging.getLogger(__name__)
@@ -132,6 +134,47 @@ def run_resnet_18_folds(data_path: Path, results_dir: Path):
             X_test=dataset.X_test,
             y_test=dataset.y_test,
             results_dir=fold_results_dir,
+            input_dir=data_path
+        )
+        metrics.append([results.mae, results.mape, results.rmse, results.r2_score])
+
+    metrics = np.array(metrics)
+
+    # Calculate the mean of the corresponding columns (mean along axis 0)
+    metric_average = np.mean(metrics, axis=0)
+    metric_std = np.std(metrics, axis=0, ddof=1)
+    metrics = metrics.tolist()
+    metrics.append(metric_average.tolist())
+    metrics.append(metric_std.tolist())
+
+    write_csv_file(results_dir / summary_filename, header=header, rows=metrics)
+
+def run_custom_folds(data_path: Path, results_dir: Path):
+    """
+    Runs Resnet 18 pretrained CNN for dataset folds.
+
+    :param data_path: Path to the dataset folds JSON file.
+    :param results_dir: The directory to store the results.
+    """
+    logger.info("Loading folds")
+    dataset_folds = load_dataset_folds(data_path)
+    if not os.path.exists(results_dir):
+        os.mkdir(results_dir)
+
+    summary_filename = "summary.csv"
+    header = ["MAE", "MAPE", "RMSE", "R2"]
+    metrics = []
+
+    for i, dataset in enumerate(dataset_folds):
+        fold_results_dir = results_dir / f"train{i}"
+
+        model, results = run_custom_cnn(
+            X_train=dataset.X_train,
+            y_train=dataset.y_train,
+            X_test=dataset.X_test,
+            y_test=dataset.y_test,
+            results_dir=fold_results_dir,
+            input_dir=data_path
         )
         metrics.append([results.mae, results.mape, results.rmse, results.r2_score])
 
@@ -147,6 +190,80 @@ def run_resnet_18_folds(data_path: Path, results_dir: Path):
     write_csv_file(results_dir / summary_filename, header=header, rows=metrics)
 
 
+def run_resnet_18(
+        X_train, y_train, X_test, y_test, results_dir: Path, input_dir: Path
+) -> tuple[torch.nn.Module, ModelRunResults]:
+    """
+    Run the ResNet-18 model.
+
+    :param X_train: Features of the train dataset.
+    :param y_train: Labels of the train dataset.
+    :param X_test: Features of the test dataset.
+    :param y_test: Labels of the test dataset.
+    :param results_dir: The directory where the results will be stored.
+    :return: The model and the metrics.
+    """
+    model_name = f"resnet18"
+    model = _load_resnet()
+
+    loss_function = nn.MSELoss()
+    initial_lr = 0.001
+    optimiser = torch.optim.Adam(model.parameters(), lr=initial_lr, weight_decay=0)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimiser, step_size=10, gamma=0.7)
+    epochs = 50
+    patience = 10
+    delta = 0.01
+    stack_three_channels = True
+    transforms_train = TRANSFORM_TRAIN
+    transforms_test = TRANSFORM_TEST
+
+    return run_pretrained(X_train=X_train, y_train=y_train, X_test=X_test, y_test=y_test, model=model,
+                          loss_function=loss_function, optimiser=optimiser, epochs=epochs, patience=patience,
+                          delta=delta, lr_scheduler=lr_scheduler, results_dir=results_dir, model_name=model_name,
+                          input_dir=input_dir, stack_three_channels=stack_three_channels, transforms_train=transforms_train,
+                          transforms_test=transforms_test)
+
+def run_custom_cnn(
+    X_train, y_train, X_test, y_test, results_dir: Path, input_dir: Path
+) -> tuple[torch.nn.Module, ModelRunResults]:
+    """
+    Run the ResNet-18 model.
+
+    :param X_train: Features of the train dataset.
+    :param y_train: Labels of the train dataset.
+    :param X_test: Features of the test dataset.
+    :param y_test: Labels of the test dataset.
+    :param results_dir: The directory where the results will be stored.
+    :return: The model and the metrics.
+    """
+    model_name = f"custom_cnn"
+    model = CNNModel(X_train.shape[1])
+
+    loss_function = nn.MSELoss()
+    initial_lr = 0.001
+    optimiser = torch.optim.Adam(model.parameters(), lr=initial_lr, weight_decay=0)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimiser, step_size=10, gamma=0.7)
+    epochs = 50
+    patience = 10
+    delta = 0.01
+    stack_three_channels = False
+    transforms_train = v2.Compose([
+        v2.RandomHorizontalFlip(0.5),
+        v2.RandomVerticalFlip(0.5),
+        v2.RandomRotation(30),
+        v2.RandomResizedCrop(size=(640, 640), scale=(0.8, 1.0)),
+        v2.RandomAffine(20),
+        v2.RandomPerspective()
+    ])
+    transforms_test = None
+
+    return run_pretrained(X_train=X_train, y_train=y_train, X_test=X_test, y_test=y_test, model=model,
+                          loss_function=loss_function, optimiser=optimiser, epochs=epochs, patience=patience,
+                          delta=delta, lr_scheduler=lr_scheduler, results_dir=results_dir, model_name=model_name,
+                          input_dir=input_dir, stack_three_channels=stack_three_channels,
+                          transforms_train=transforms_train,
+                          transforms_test=transforms_test)
+
 def run_pretrained(
     X_train: np.ndarray,
     y_train: np.ndarray,
@@ -161,6 +278,10 @@ def run_pretrained(
     lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
     results_dir: Path,
     model_name: str,
+    input_dir: Path,
+    stack_three_channels: bool,
+    transforms_train: Optional[v2.Compose],
+    transforms_test: Optional[v2.Compose]
 ) -> tuple[torch.nn.Module, ModelRunResults]:
     """
     Run the pretrained pytorch model.
@@ -175,6 +296,7 @@ def run_pretrained(
     :param epochs: The number of epochs.
     :param results_dir: The directory where the results will be stored.
     :param model_name: The name of the model, saved as one of the run args.
+    :param input_dir: The directory that contained the dataset folds. Used for run args recording.
     :return: The model and the metrics.
     """
 
@@ -190,13 +312,14 @@ def run_pretrained(
         delta=delta,
         lr_scheduler=lr_scheduler,
         results_dir=results_dir,
+        input_dir=input_dir
     )
 
     train_loader = _prepare_data(
-        X=X_train, y=y_train, transform=TRANSFORM_TRAIN, shuffle=True
+        X=X_train, y=y_train, transform=transforms_train, shuffle=True, stack_three_channels=stack_three_channels
     )
     test_loader = _prepare_data(
-        X=X_test, y=y_test, transform=TRANSFORM_TEST, shuffle=False
+        X=X_test, y=y_test, transform=transforms_test, shuffle=False, stack_three_channels=stack_three_channels
     )
     early_stopping = EarlyStopping(
         patience=patience, delta=delta, path=results_dir / "checkpoint.pth"
@@ -239,45 +362,6 @@ def run_pretrained(
     return model, metrics
 
 
-def run_resnet_18(
-    X_train, y_train, X_test, y_test, results_dir: Path
-) -> tuple[torch.nn.Module, ModelRunResults]:
-    """
-    Run the ResNet-18 model.
-
-    :param X_train: Features of the train dataset.
-    :param y_train: Labels of the train dataset.
-    :param X_test: Features of the test dataset.
-    :param y_test: Labels of the test dataset.
-    :param results_dir: The directory where the results will be stored.
-    :return: The model and the metrics.
-    """
-    model_name = f"resnet18"
-    model = _load_resnet()
-
-    loss_function = nn.MSELoss()
-    initial_lr = 0.001
-    optimiser = torch.optim.Adam(model.parameters(), lr=initial_lr, weight_decay=0)
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimiser, step_size=10, gamma=0.7)
-    epochs = 50
-    patience = 10
-    delta = 0.01
-
-    return run_pretrained(
-        X_train=X_train,
-        y_train=y_train,
-        X_test=X_test,
-        y_test=y_test,
-        model=model,
-        loss_function=loss_function,
-        optimiser=optimiser,
-        epochs=epochs,
-        results_dir=results_dir,
-        model_name=model_name,
-        patience=patience,
-        delta=delta,
-        lr_scheduler=lr_scheduler,
-    )
 
 
 def _load_resnet() -> nn.Module:
@@ -287,7 +371,7 @@ def _load_resnet() -> nn.Module:
     """
     model = torchvision.models.resnet18(pretrained=True)
 
-    model.fc = nn.Linear(model.fc.in_features, 128)
+    model.fc = nn.Linear(model.fc.in_features, 1)
     # model.fc = nn.Sequential(
     #     nn.Linear(model.fc.in_features, 128),  # Dense layer with 128 units
     #     nn.ReLU(),  # Activation function
@@ -309,9 +393,10 @@ def _load_efficientnet() -> nn.Module:
 
 
 def _prepare_data(
-    X: np.ndarray, y: np.ndarray, transform: v2.Compose, shuffle: bool
+    X: np.ndarray, y: np.ndarray, transform: v2.Compose, shuffle: bool, stack_three_channels: bool
 ) -> DataLoader:
-    X = _stack_three_channels(X)
+    if stack_three_channels:
+        X = _stack_three_channels(X)
 
     dataset = CustomDataset(
         X=torch.from_numpy(X).float(),
@@ -371,7 +456,7 @@ def _train(
 
             # Forward pass
             outputs = model(depth_mask)
-            loss = loss_function(outputs.squeeze(), weights)
+            loss = loss_function(outputs, weights)
 
             # Backward pass and optimization
             loss.backward()
@@ -388,7 +473,7 @@ def _train(
                     model.to("cuda")
 
                 output = model(depth_mask)
-                loss = loss_function(output.squeeze(), weights)
+                loss = loss_function(output, weights)
                 val_loss += loss.item()
 
         train_loss /= len(train_loader)
@@ -440,6 +525,7 @@ def _save_run_args(
     results_dir: Path,
     patience: int,
     delta: float,
+    input_dir: Path
 ):
     """
     Save the model run arguments in a YAML file.
@@ -458,6 +544,7 @@ def _save_run_args(
         "epochs": epochs,
         "optimiser_info": optimiser_info,
         "save_dir": results_dir.as_posix(),
+        "input_dir": input_dir,
         "patience": patience,
         "delta": delta,
         "lr_scheduler": lr_scheduler.state_dict(),

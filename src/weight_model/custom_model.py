@@ -1,12 +1,14 @@
-import torch
 import torch.nn as nn
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Define a basic CNN model for regression
 class CNNModel(nn.Module):
-    def __init__(self):
+    def __init__(self, num_channels: int):
         super(CNNModel, self).__init__()
         self.conv_layers = nn.Sequential(
-            nn.Conv2d(in_channels=1, out_channels=16, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(in_channels=num_channels, out_channels=16, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, stride=1, padding=1),
@@ -29,8 +31,3 @@ class CNNModel(nn.Module):
         x = self.conv_layers(x)
         x = self.fc(x)
         return x
-
-
-if __name__ == '__main__':
-    model = CNNModel()
-    print(model.eval())
