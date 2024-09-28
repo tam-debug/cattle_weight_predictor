@@ -9,7 +9,7 @@ from torchvision.transforms import v2
 import torchvision.models.efficientnet as efficientnet
 import torchvision.models.resnet as resnet
 
-from weight_model.custom_model import CNNModel
+from weight_model.custom_model import CNNModel, CNNModel_1
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ class RunConfig:
     patience: int
     delta: float
     stack_three_channels: bool
+    batch_size: int
     lr_scheduler: Optional[torch.optim.lr_scheduler] = None
     transforms_train: Optional[v2.Compose] = None
     transforms_test: Optional[v2.Compose] = None
@@ -71,7 +72,7 @@ def get_run_config(config_name: str, num_channels: int) -> RunConfig:
     :param num_channels: The number of channels (required for the custom model).
     :return: The run configuration.
     """
-    config_names = ["resnet", "custom"]
+    config_names = ["resnet", "custom", "efficientnet"]
     if config_name not in config_names:
         raise ValueError(f"{config_name} must be either {config_names}")
 
@@ -89,6 +90,7 @@ def get_run_config(config_name: str, num_channels: int) -> RunConfig:
         epochs = 50
         patience = 10
         delta = 0.01
+        batch_size = 64
         stack_three_channels = True
         transforms_train = v2.Compose(
             [
@@ -117,6 +119,7 @@ def get_run_config(config_name: str, num_channels: int) -> RunConfig:
         )
         lr_scheduler = None
         epochs = 50
+        batch_size = 64
         patience = 10
         delta = 0.01
         stack_three_channels = True
@@ -146,7 +149,8 @@ def get_run_config(config_name: str, num_channels: int) -> RunConfig:
         )
         lr_scheduler = None
         epochs = 50
-        patience = 10
+        batch_size = 64
+        patience = 20
         delta = 0.01
         stack_three_channels = False
         transforms_train = v2.Compose(
@@ -157,24 +161,26 @@ def get_run_config(config_name: str, num_channels: int) -> RunConfig:
                 v2.RandomResizedCrop(size=(640, 640), scale=(0.8, 1.0)),
                 v2.RandomAffine(20),
                 v2.RandomPerspective(),
+                v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             ]
         )
         transforms_test = None
 
-        return RunConfig(
-            model_name=model_name,
-            model=model,
-            loss_function=loss_function,
-            initial_lr=initial_lr,
-            optimiser=optimiser,
-            epochs=epochs,
-            patience=patience,
-            delta=delta,
-            lr_scheduler=lr_scheduler,
-            stack_three_channels=stack_three_channels,
-            transforms_train=transforms_train,
-            transforms_test=transforms_test,
-        )
+    return RunConfig(
+        model_name=model_name,
+        model=model,
+        loss_function=loss_function,
+        initial_lr=initial_lr,
+        optimiser=optimiser,
+        epochs=epochs,
+        batch_size=batch_size,
+        patience=patience,
+        delta=delta,
+        lr_scheduler=lr_scheduler,
+        stack_three_channels=stack_three_channels,
+        transforms_train=transforms_train,
+        transforms_test=transforms_test,
+    )
 
 
 def _load_resnet() -> torch.nn.Module:

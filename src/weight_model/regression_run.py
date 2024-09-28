@@ -172,6 +172,7 @@ def run_regression(
         transform=run_config.transforms_train,
         shuffle=True,
         stack_three_channels=run_config.stack_three_channels,
+        batch_size=run_config.batch_size
     )
     test_loader = _prepare_data(
         X=X_test,
@@ -179,6 +180,7 @@ def run_regression(
         transform=run_config.transforms_test,
         shuffle=False,
         stack_three_channels=run_config.stack_three_channels,
+        batch_size=run_config.batch_size
     )
     early_stopping = EarlyStopping(
         patience=run_config.patience,
@@ -229,6 +231,7 @@ def _prepare_data(
     transform: v2.Compose,
     shuffle: bool,
     stack_three_channels: bool,
+    batch_size: int
 ) -> DataLoader:
     if stack_three_channels:
         X = _stack_three_channels(X)
@@ -238,7 +241,7 @@ def _prepare_data(
         y=torch.from_numpy(y).long(),
         transform=transform,
     )
-    loader = DataLoader(dataset, batch_size=32, shuffle=shuffle)
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
     return loader
 
 
