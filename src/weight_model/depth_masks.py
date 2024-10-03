@@ -104,6 +104,7 @@ def generate_depth_masks(
     start_num: int,
     end_num: int,
     rgb_transform_params: RgbTransformParams,
+    scale_to_255: bool,
     save_dir: Path = None,
     id_mapping_dir: Path = None,
     seg_mask_dir: Path = None,
@@ -155,7 +156,7 @@ def generate_depth_masks(
             )
 
             _depth_mappings = _create_depth_masks(
-                seg_mappings=seg_mappings, depth_frame=depth_frame
+                seg_mappings=seg_mappings, depth_frame=depth_frame, scale_to_255=scale_to_255
             )
             depth_mappings.extend(_depth_mappings)
 
@@ -178,6 +179,71 @@ def generate_depth_masks(
         _save_depth_masks(depth_mappings=depth_mappings, file_path=save_dir)
 
     return depth_mappings
+
+def get_depth_masks_mean_and_stddev(
+    seg_model: str,
+    rgb_image_dir: Path,
+    depth_image_dir: Path,
+    weights_file: Path,
+    start_num: int,
+    end_num: int,
+    rgb_transform_params: RgbTransformParams,
+    id_mapping_dir: Path = None,
+    seg_mask_dir: Path = None,
+    prelabel_mask_dir: Path = None
+) -> list[DepthMaskWeight]:
+    if prelabel_mask_dir:
+        seg_masks = load_prelabel_masks(prelabel_mask_dir, start_num=start_num, end_num=end_num)
+    elif seg_mask_dir:
+        seg_masks = load_seg_mask_tensors(seg_mask_dir, start_num=start_num, end_num=end_num)
+    else:
+        seg_masks = generate_masks(seg_model, rgb_image_dir)
+
+    weights = _load_weights(weights_file)
+
+    depth_values = []
+
+    if id_mapping_dir:
+        for image_number, _seg_masks in seg_masks.items():
+            seg_masks = _seg_masks.masks
+            depth_frame = _load_depth_frame(
+                file_path=_get_depth_image_name(
+                    image_path=image_number, depth_image_dir=depth_image_dir
+                )
+            )
+            resized_seg_masks = resize_mask(
+                seg_masks, height=depth_frame.shape[0], width=depth_frame.shape[1]
+            )
+
+            id_mapping_file = id_mapping_dir / f"{image_number}.json"
+
+            seg_mappings = _match_mask_to_weight(
+                seg_masks=resized_seg_masks,
+                weights=weights,
+                id_mapping_file=id_mapping_file,
+                original_scale=_seg_masks.original_hw,
+                rgb_transform_params=rgb_transform_params
+            )
+
+            for seg_mapping in seg_mappings:
+                binary_mask = seg_mapping.seg_mask
+                scale_x = depth_frame.shape[1] / binary_mask.shape[1]
+                scale_y = depth_frame.shape[0] / binary_mask.shape[0]
+
+                coordinates = np.column_stack(np.where(binary_mask == 1))
+
+                for coord in coordinates:
+                    rgb_y, rgb_x = coord
+                    depth_x = int(rgb_x * scale_x)
+                    depth_y = int(rgb_y * scale_y)
+
+                    depth_value = depth_frame[depth_y, depth_x]
+                    depth_values.append(depth_value)
+
+    depth_masks = np.array(depth_values)
+    mean = np.mean(depth_masks)
+    std = np.std(depth_masks, ddof=1)
+    print(f"Mean {mean} Standard Deviation {std}")
 
 
 def _load_weights(weights_file) -> dict[str, float]:
@@ -296,7 +362,7 @@ def _load_depth_frame(file_path: Union[str, Path]) -> np.ndarray:
 
 
 def _create_depth_masks(
-    seg_mappings: list[SegMaskWeight], depth_frame: np.ndarray
+    seg_mappings: list[SegMaskWeight], depth_frame: np.ndarray, scale_to_255: bool
 ) -> list[DepthMaskWeight]:
     """
     Creates the depth masks from the binary segmentation masks.
@@ -306,7 +372,7 @@ def _create_depth_masks(
 
     for seg_mapping in seg_mappings:
         binary_mask = seg_mapping.seg_mask
-        depth_mask = _create_depth_mask(binary_mask, depth_frame)
+        depth_mask = _create_depth_mask(binary_mask, depth_frame, scale_to_255)
         depth_masks.append(
             DepthMaskWeight(depth_mask=depth_mask, weight=seg_mapping.weight)
         )
@@ -315,7 +381,7 @@ def _create_depth_masks(
     return depth_masks
 
 
-def _create_depth_mask(binary_mask: np.ndarray, depth_frame: np.ndarray) -> np.ndarray:
+def _create_depth_mask(binary_mask: np.ndarray, depth_frame: np.ndarray, scale_to_255: bool) -> np.ndarray:
     """
     Creates a depth mask from a binary segmentation mask.
     """
@@ -325,22 +391,38 @@ def _create_depth_mask(binary_mask: np.ndarray, depth_frame: np.ndarray) -> np.n
 
     output_mask = np.zeros_like(binary_mask, dtype=np.float32)
     coordinates = np.column_stack(np.where(binary_mask == 1))
+    original_depth_values = []
 
     for coord in coordinates:
         rgb_y, rgb_x = coord
         depth_x = int(rgb_x * scale_x)
         depth_y = int(rgb_y * scale_y)
 
-        depth_value = depth_frame[depth_y, depth_x]
+        original_depth_values.append(depth_frame[depth_y, depth_x])
 
-        output_mask[rgb_y, rgb_x] = depth_value
+    if scale_to_255:
+        normalised_depth_values = _normalise_depth_values(depth_values=np.array(original_depth_values))
+        normalised_depth_values = normalised_depth_values * 255
+    else:
+        normalised_depth_values = original_depth_values
 
-    output_mask_normalized = cv2.normalize(output_mask, None, 0, 255, cv2.NORM_MINMAX)
-    output_mask_normalized = np.uint8(output_mask_normalized)
+    for i, coord in enumerate(coordinates):
+        rgb_y, rgb_x = coord
+        output_mask[rgb_y, rgb_x] = normalised_depth_values[i]
+
+    # output_mask_normalized = cv2.normalize(output_mask, None, 0, 255, cv2.NORM_MINMAX)
+    output_mask_normalized = output_mask
     scaled_mask = _scale_mask(output_mask_normalized)
     padded_image = _pad_image(scaled_mask)
 
     return padded_image
+
+
+def _normalise_depth_values(depth_values: np.ndarray) -> np.ndarray:
+    min_val = np.min(depth_values)
+    max_val = np.max(depth_values)
+    normalised_data = (depth_values - min_val) / (max_val - min_val)
+    return normalised_data
 
 
 def _scale_mask(mask: np.ndarray, dimension: int = SCALE_DIMENSION) -> np.ndarray:

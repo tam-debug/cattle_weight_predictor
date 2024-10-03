@@ -90,7 +90,8 @@ def plot_loss(loss: list[float], title: str, file_path: Path = None):
     :param file_path: The file path to save the plot to.
     """
     plt.plot(loss)
-    plt.xlabel("Epoch")
+    plt.yscale("log")
+    plt.xlabel("Epoch starting at 5")
     plt.ylabel("Loss")
     plt.title(title)
     if file_path:

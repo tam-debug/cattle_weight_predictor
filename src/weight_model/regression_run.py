@@ -80,7 +80,7 @@ class EarlyStopping:
         elif score < self.best_score + self.delta:
             self.counter += 1
             if self.verbose:
-                print(f"EarlyStopping counter: {self.counter} out of {self.patience}")
+                logger.info(f"EarlyStopping counter: {self.counter} out of {self.patience}")
             if self.counter >= self.patience:
                 self.early_stop = True
         else:
@@ -90,7 +90,7 @@ class EarlyStopping:
 
     def save_checkpoint(self, val_loss, model):
         if self.verbose:
-            print(
+            logger.info(
                 f"Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ..."
             )
         torch.save(model.state_dict(), self.path)
@@ -164,7 +164,9 @@ def run_regression(
     if not os.path.exists(results_dir):
         os.mkdir(results_dir)
 
-    run_config.save_run_args(input_dir=input_dir, results_dir=results_dir)
+    model = run_config.get_model()
+    optimiser = run_config.get_optimiser(model)
+    run_config.save_run_args(input_dir=input_dir, results_dir=results_dir, optimiser=optimiser)
 
     train_loader = _prepare_data(
         X=X_train,
@@ -185,14 +187,14 @@ def run_regression(
     early_stopping = EarlyStopping(
         patience=run_config.patience,
         delta=run_config.delta,
-        path=results_dir / "checkpoint.pth",
+        path=results_dir / "early_stopping.pth",
     )
 
     training_results = _train(
-        model=run_config.model,
+        model=model,
         train_loader=train_loader,
         val_loader=test_loader,
-        optimiser=run_config.optimiser,
+        optimiser=optimiser,
         loss_function=run_config.loss_function,
         epochs=run_config.epochs,
         early_stopping=early_stopping,
@@ -210,9 +212,9 @@ def run_regression(
         file_path=results_dir / VAL_LOSS_PLOT_FILENAME,
     )
 
-    run_config.model.load_state_dict(torch.load(early_stopping.path))
+    model.load_state_dict(torch.load(early_stopping.path.parent / "best.pth"))
 
-    predictions = _test(model=run_config.model, test_loader=test_loader)
+    predictions = _test(model=model, test_loader=test_loader)
 
     metrics = ModelRunResults(y_true=y_test, y_pred=predictions)
     metrics.write_predictions(file_path=results_dir / VAL_PREDICTIONS)
@@ -273,7 +275,7 @@ def _train(
     optimiser: torch.optim.Optimizer,
     loss_function,
     early_stopping: EarlyStopping,
-    lr_scheduler: Optional[torch.optim.lr_scheduler.LRScheduler],
+    lr_scheduler, #: Optional[torch.optim.lr_scheduler.LRScheduler],
     epochs: int = 100,
 ) -> TrainingResults:
     """
@@ -281,6 +283,7 @@ def _train(
     """
 
     training_results = TrainingResults(model)
+    best_loss = None
     model.train()
     for epoch in range(epochs):
         train_loss = 0.0
@@ -318,6 +321,9 @@ def _train(
         val_loss /= len(val_loader)
         training_results.training_loss.append(train_loss)
         training_results.validation_loss.append(val_loss)
+
+        if best_loss == None or val_loss < best_loss:
+            torch.save(model.state_dict(), early_stopping.path.parent / "best.pth")
 
         logger.info(
             f"Epoch [{epoch + 1}/{epochs}], Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}"

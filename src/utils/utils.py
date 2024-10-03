@@ -111,7 +111,8 @@ def show_mask(mask: np.ndarray):
     Shows the mask in a new window.
     :param mask: The mask to display.
     """
-    cv2.imshow("Output Mask", mask)
+    # output_mask_normalized = np.uint8(output_mask_normalized)
+    cv2.imshow("Output Mask", mask.astype(np.uint8))
     cv2.waitKey(0)
     cv2.destroyAllWindows()
     cv2.waitKey(1)
