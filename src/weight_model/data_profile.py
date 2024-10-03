@@ -14,15 +14,16 @@ def plot_weights_histogram(weights_file_path: Path):
 
     plt.figure(figsize=(12, 6))
     sns.histplot(df["Weight"], binwidth=20)
-    plt.xlabel('Weight')
+    plt.xlabel('Weight (kg)')
     plt.ylabel('Frequency')
-    plt.title('Histogram of Weights')
+    plt.title('Distribution of Weights')
 
     plt.show()
 
 def plot_weights_bar(weights_file_path: Path):
     df = pd.read_csv(weights_file_path)
-    bins = pd.cut(df['Weight'], bins=range(int(df['Weight'].min()), int(df['Weight'].max()) + 10, 10))
+    # bins = pd.cut(df['Weight'], bins=range(int(df['Weight'].min()), int(df['Weight'].max()) + 10, 10))
+    bins = pd.cut(df['Weight'], bins=range(240, 605 + 10, 10))
     weight_counts = bins.value_counts().sort_index()
 
     # Convert to a DataFrame for plotting
@@ -31,7 +32,7 @@ def plot_weights_bar(weights_file_path: Path):
     # Plot using a bar plot
     plt.figure(figsize=(12, 6))
     sns.barplot(x='Weight Range', y='Count', data=weight_df)
-    plt.xlabel('Weight')
+    plt.xlabel('Weight (kg)')
     plt.ylabel('Frequency')
     plt.xticks(rotation=90)
     plt.title('Distribution of Weights')
@@ -51,7 +52,7 @@ def plot_weights_scatter(weights_file_path: Path):
 
     # Add labels and title
     plt.xlabel('Cattle image')
-    plt.ylabel('Weight')
+    plt.ylabel('Weight (kg)')
     plt.title("Cattle weights dataset")
 
     # Show the plot
