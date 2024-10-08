@@ -12,7 +12,7 @@ from typing import Callable
 import torchvision.models.resnet as resnet
 import torchvision.models.efficientnet as efficientnet
 
-from weight_model.custom_model import CNNModel_4, CNNModel_1, CNNModel_2, CNNModel_3
+from weight_model.custom_model import CNNModel_4, CNNModel_1, CNNModel_2, CNNModel_3, CNNModel_2_2, CNNModel_4_2
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ def get_run_config(config_name: str, num_channels: int, mean: list[float] = None
     :param num_channels: The number of channels (required for the custom model).
     :return: The run configuration.
     """
-    config_names = ["resnet", "mobilenet", "custom_1", "custom_2"]
+    config_names = ["resnet", "mobilenet", "custom_1", "custom_2", "custom_1_2", "custom_2_2"]
     if config_name not in config_names:
         raise ValueError(f"{config_name} must be either {config_names}")
 
@@ -215,6 +215,62 @@ def get_run_config(config_name: str, num_channels: int, mean: list[float] = None
         )
         transforms_test = v2.Compose([v2.Normalize(mean=mean, std=std)])
 
+    elif config_name == "custom_1_2":
+        model_name = "custom_cnn_1"
+        model = CNNModel_4_2
+        loss_function = torch.nn.MSELoss()
+        initial_lr = 0.001
+        optimiser = torch.optim.Adam(CNNModel_4(num_channels).parameters(), lr=initial_lr, weight_decay=0)
+        # lr_scheduler = torch.optim.lr_scheduler.steplr(
+        #     optimiser, step_size=10, gamma=0.7
+        # )
+        lr_scheduler = None
+        epochs = 50
+        batch_size = 64
+        patience = 15
+        delta = 0.01
+        stack_three_channels = False
+        num_channels = num_channels
+        transforms_train = v2.Compose(
+            [
+                v2.RandomHorizontalFlip(0.5),
+                v2.RandomVerticalFlip(0.5),
+                v2.RandomRotation(30),
+                v2.RandomResizedCrop(size=(640, 640), scale=(0.8, 1.0)),
+                v2.RandomAffine(degrees=0, translate=(0.2, 0.2)),
+                v2.RandomPerspective(),
+                v2.Normalize(mean=mean, std=std)
+            ]
+        )
+        transforms_test = v2.Compose([v2.Normalize(mean=mean, std=std)])
+    elif config_name == "custom_2_2":
+        model_name = "custom_cnn_2"
+        model = CNNModel_2_2
+        loss_function = torch.nn.MSELoss()
+        initial_lr = 0.001
+        optimiser = torch.optim.Adam(CNNModel_2(num_channels).parameters(), lr=initial_lr, weight_decay=0)
+        # lr_scheduler = torch.optim.lr_scheduler.steplr(
+        #     optimiser, step_size=10, gamma=0.7
+        # )
+        lr_scheduler = None
+        epochs = 50
+        batch_size = 64
+        patience = 15
+        delta = 0.01
+        stack_three_channels = False
+        num_channels = num_channels
+        transforms_train = v2.Compose(
+            [
+                v2.RandomHorizontalFlip(0.5),
+                v2.RandomVerticalFlip(0.5),
+                v2.RandomRotation(30),
+                v2.RandomResizedCrop(size=(640, 640), scale=(0.8, 1.0)),
+                v2.RandomAffine(degrees=0, translate=(0.2, 0.2)),
+                v2.RandomPerspective(),
+                v2.Normalize(mean=mean, std=std)
+            ]
+        )
+        transforms_test = v2.Compose([v2.Normalize(mean=mean, std=std)])
     return RunConfig(
         model_name=model_name,
         model=model,
