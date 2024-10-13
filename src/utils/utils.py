@@ -117,6 +117,24 @@ def show_mask(mask: np.ndarray):
     cv2.destroyAllWindows()
     cv2.waitKey(1)
 
+def show_point_on_black_background(x: int, y: int, height: int, width: int):
+    """
+    Shows a green point (according to given coordinates) on a black image with specified dimensions.
+    :param x: The x-coordinate of the point.
+    :param y: The y-coordinate of the point.
+    :param height: The image height.
+    :param width: The image width.
+    """
+
+    image = np.zeros((height, width, 3), dtype=np.uint8)
+    color = (0, 255, 0)
+    radius = 20
+
+    thickness = -1  # -1 means filled circle
+
+    cv2.circle(image, (x, y), radius, color, thickness)
+    cv2.imshow('Black Rectangle with Point', image)
+    cv2.waitKey(0)
 
 def resize_mask(masks: torch.tensor, height: int, width: int) -> np.ndarray:
     """

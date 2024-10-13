@@ -5,7 +5,6 @@ Methods for storing and loading the segmented depth masks with the weights list.
 import csv
 import cv2
 from dataclasses import dataclass
-import json
 from json import JSONEncoder
 import logging
 from pathlib import Path

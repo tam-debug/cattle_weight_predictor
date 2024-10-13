@@ -1,3 +1,4 @@
+import csv
 from dataclasses import dataclass
 import logging
 import os
@@ -201,6 +202,9 @@ def run_regression(
         lr_scheduler=run_config.lr_scheduler,
     )
 
+    _save_loss(losses=training_results.training_loss, file_path=results_dir/"train_loss.csv")
+    _save_loss(losses=training_results.validation_loss, file_path=results_dir/"validation_loss.csv")
+
     plot_loss(
         training_results.training_loss,
         title="Training Loss",
@@ -225,6 +229,12 @@ def run_regression(
     metrics.print()
 
     return metrics
+
+def _save_loss(losses: list[float], file_path: Path):
+    with open(file_path, 'w', newline='') as file:
+        writer = csv.writer(file)
+        for loss in losses:
+            writer.writerow([loss])
 
 
 def _prepare_data(
