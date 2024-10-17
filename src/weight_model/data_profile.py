@@ -59,16 +59,14 @@ def plot_weights_scatter(weights_file_path: Path):
     plt.tight_layout()
     plt.show()
 
-def plot_histogram(data, title, colour=None):
-    sns.histplot(data, binwidth=10, color=colour)
 
-    # Add labels and legend
-    plt.xlabel('Weight')
-    plt.ylabel('Frequency')
-    plt.legend()
+def plot_histogram(data, title, colour='b'):
+    plt.figure()
+    sns.histplot(data, kde=False, color=colour)
+    plt.xlim(240, 610)  # Set x-axis limits here
     plt.title(title)
-
-    # Show plot
+    plt.xlabel('Weight (kg)')
+    plt.ylabel('Frequency')
     plt.show()
 
 
@@ -78,8 +76,8 @@ def plot_fold_weights_histogram(weights_file_path: Path, k_folds_path: Path):
     folds = load_folds_configuration(k_folds_path)
     for i, values in enumerate(folds, start=1):
         train_indexes, test_indexes = values
-        plot_histogram(data=df["Weight"].iloc[train_indexes], title=f"Split {i} Train"),
-        plot_histogram(data=df["Weight"].iloc[test_indexes], title=f"Split {i} Test", colour=sns.color_palette()[1])
+        # plot_histogram(data=df["Weight"].iloc[train_indexes], title=f"Fold {i} Train"),
+        plot_histogram(data=df["Weight"].iloc[test_indexes], title=f"Fold {i} Validation", colour=sns.color_palette()[1])
 
 def count_fold_instances(k_folds_path: Path):
     folds = load_folds_configuration(k_folds_path)
