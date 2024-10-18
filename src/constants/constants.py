@@ -85,3 +85,4 @@ TRAIN_LOSS_PLOT_FILENAME = "train_loss_plot.png"
 VAL_LOSS_PLOT_FILENAME = "val_loss_plot.png"
 VAL_PREDICTIONS = "val_predictions.csv"
 VAL_METRICS = "val_metrics.csv"
+

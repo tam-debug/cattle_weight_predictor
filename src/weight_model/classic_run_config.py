@@ -6,7 +6,8 @@ import yaml
 
 from sklearn.svm import SVR
 from sklearn.linear_model import LinearRegression, Ridge
-from sklearn.ensemble import BaggingRegressor, RandomForestRegressor
+from sklearn.ensemble import BaggingRegressor, RandomForestRegressor, GradientBoostingRegressor, \
+    GradientBoostingClassifier
 
 
 @dataclass
@@ -31,6 +32,11 @@ class ClassicRunConfig:
 
         with open(results_dir / "run_args.yaml", "w") as file:
             yaml.dump(args, file, default_flow_style=False)
+
+    def get_kwargs(self):
+        exclude_keys = ["model_name", "mean_values", "std_values", "exclude_attr_from_run_args"]
+        kwargs = vars(self).copy()
+        return kwargs
 
 
 @dataclass
@@ -161,10 +167,36 @@ class RandomForestRunConfig(ClassicRunConfig):
             max_samples=self.max_samples
         )
 
+@dataclass
+class GradientBoostingRunConfig(ClassicRunConfig):
+    loss: str = "squared_error"
+    learning_rate: float = 0.1
+    n_estimators: int = 100
+    subsample: float = 1
+    criterion: str = 'friedman_mse'
+    min_samples_split: int = 2
+    min_samples_leaf: int = 1
+    min_weight_fraction_leaf: float = 0.0
+    max_depth: int = 3
+    min_impurity_decrease: float = 0.0
+    random_state: int = None
+    max_features: int = None
+    alpha: float = 0.9
+    max_leaf_nodes: int = None
+    warm_start: bool = False
+    validation_fraction: float = 0.1
+    n_iter_no_change: int = None
+    tol: float = 0.0001
+    ccp_alpha: float = 0.0
+
+    def get_model(self):
+        model_args = self.get_kwargs()
+        return GradientBoostingClassifier(**model_args)
+
 def get_classic_run_config(
     mean: list[float], std: list[float], config_name: str = "svr"
 ) -> ClassicRunConfig:
-    config_names = ["svr", "linear", "ridge", "bagging", "random_forest"]
+    config_names = ["svr", "linear", "ridge", "bagging", "random_forest", "gradient_boosting"]
     exclude_from_run_args = ["mean", "std"]
 
     if config_name not in config_names:
@@ -260,5 +292,11 @@ def get_classic_run_config(
             exclude_attr_from_run_args=exclude_from_run_args,
             n_estimators=n_estimators
         )
-
-
+    elif config_name == "gradient_boosting":
+        model_name = "GradientBoostingRegressor"
+        return GradientBoostingRunConfig(
+            model_name=model_name,
+            mean_values=mean,
+            std_values=std,
+            exclude_attr_from_run_args=exclude_from_run_args,
+        )
