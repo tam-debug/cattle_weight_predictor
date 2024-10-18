@@ -99,7 +99,7 @@ class RidgeRunConfig(ClassicRunConfig):
 @dataclass
 class BaggingRunConfig(ClassicRunConfig):
     estimator_run_config: ClassicRunConfig = None
-    n_estimators: int = 10
+    n_estimators: int = 50
     max_samples: int = 1
     max_features: int = 1
     bootstrap: bool = True
@@ -112,7 +112,7 @@ class BaggingRunConfig(ClassicRunConfig):
     def get_model(self):
         estimator = self.estimator_run_config.get_model() if self.estimator_run_config else None
         return BaggingRegressor(
-            estimator=self.estimator,
+            estimator=estimator,
             n_estimators=self.n_estimators,
             max_samples=self.max_samples,
             max_features=self.max_features,
@@ -126,7 +126,7 @@ class BaggingRunConfig(ClassicRunConfig):
 
 @dataclass
 class RandomForestRunConfig(ClassicRunConfig):
-    n_estimators: int = 100
+    n_estimators: int = 10
     criterion: str = "squared_error"
     max_depth: int = None
     min_samples_split: int = 2
@@ -252,11 +252,13 @@ def get_classic_run_config(
         )
     elif config_name == "random_forest":
         model_name = "RandomForestRegressor"
+        n_estimators = 50
         return RandomForestRunConfig(
             model_name=model_name,
             mean_values=mean,
             std_values=std,
             exclude_attr_from_run_args=exclude_from_run_args,
+            n_estimators=n_estimators
         )
 
 
