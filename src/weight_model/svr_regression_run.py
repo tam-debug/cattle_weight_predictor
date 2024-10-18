@@ -6,7 +6,7 @@ import numpy as np
 
 from weight_model.k_fold_builder import load_dataset_folds
 from weight_model.results import ModelRunResults
-from weight_model.svr_run_config import SvrRunConfig
+from weight_model.svr_run_config import ClassicRunConfig
 from utils.utils import write_csv_file
 from constants.constants import (
     VAL_PREDICTIONS,
@@ -34,7 +34,7 @@ def scale_using_stored_values(depth_masks: np.ndarray, mean_list: list, std_list
 
 
 def run_svr_regression_folds(
-    data_path: Path, results_dir: Path, run_config: SvrRunConfig
+    data_path: Path, results_dir: Path, run_config: ClassicRunConfig
 ):
     logger.info("Loading folds")
     dataset_folds = load_dataset_folds(data_path)
@@ -46,10 +46,10 @@ def run_svr_regression_folds(
     metrics = []
     for i, dataset in enumerate(dataset_folds):
         fold_results_dir = results_dir / f"train{i}"
-        results = run_svr(
+        results = run_classic_regression(
             X_train=dataset.X_train,
-            y_train=dataset.y_train,
             X_test=dataset.X_test,
+            y_train=dataset.y_train,
             y_test=dataset.y_test,
             run_config=run_config,
             results_dir=fold_results_dir,
@@ -69,12 +69,12 @@ def run_svr_regression_folds(
     write_csv_file(results_dir / summary_filename, header=header, rows=metrics)
 
 
-def run_svr(
+def run_classic_regression(
     X_train: np.ndarray,
     X_test: np.ndarray,
     y_train: np.ndarray,
     y_test: np.ndarray,
-    run_config: SvrRunConfig,
+    run_config: ClassicRunConfig,
     results_dir: Path,
     input_dir: Path,
 ):
