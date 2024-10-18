@@ -3,10 +3,15 @@ import os
 from pathlib import Path
 
 import numpy as np
+
 from weight_model.k_fold_builder import load_dataset_folds
 from weight_model.results import ModelRunResults
 from weight_model.svr_run_config import SvrRunConfig
 from utils.utils import write_csv_file
+from constants.constants import (
+    VAL_PREDICTIONS,
+    VAL_METRICS,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -17,7 +22,7 @@ def scale_using_stored_values(depth_masks: np.ndarray, mean_list: list, std_list
     std_array = np.array(std_list).reshape(-1, 1, 1)  # Reshape to match (views, 1, 1)
 
     # Ensure the number of elements in mean and std match the number of dimensions in the depth mask
-    if depth_masks.shape[0] != len(mean_list) or depth_masks.shape[0] != len(std_list):
+    if depth_masks.shape[1] != len(mean_list) or depth_masks.shape[1] != len(std_list):
         raise ValueError(
             "Length of mean and std lists must match the number of dimensions in the depth mask."
         )
@@ -90,15 +95,21 @@ def run_svr(
     X_train_flat = X_train_scaled.reshape(len(X_train_scaled), -1)
     X_test_flat = X_test_scaled.reshape(len(X_test_scaled), -1)
 
-    # Initialize SVR model
     model = run_config.get_model()
     run_config.save_run_args(input_dir=input_dir, results_dir=results_dir)
 
     # Train the model
-    model.fit(X_train_flat, y_train)
+    model.fit(X_train_flat, y_train.ravel())
 
     # Predict on validation set
     predictions = model.predict(X_test_flat)
-    metrics = ModelRunResults(y_true=y_test, y_pred=predictions)
+
+    metrics = ModelRunResults(y_true=y_test.ravel(), y_pred=predictions)
+    metrics.write_predictions(file_path=results_dir / VAL_PREDICTIONS)
+    metrics.write_metrics(file_path=results_dir / VAL_METRICS)
+    metrics.plot_actual_and_predicted_values(
+        file_path=results_dir / "actual_vs_predicted.png"
+    )
+
     metrics.print()
     return metrics

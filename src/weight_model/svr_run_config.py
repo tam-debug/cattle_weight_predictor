@@ -57,16 +57,16 @@ class SvrRunConfig:
 
 
 def get_svr_run_config(
-    mean: list[float], std: list[float], config_name: str = "SVR"
+    mean: list[float], std: list[float], config_name: str = "svr"
 ) -> SvrRunConfig:
-    config_names = ["SVR"]
+    config_names = ["svr"]
 
     if config_name not in config_names:
         raise ValueError(f"{config_name} must be either {config_names}")
 
-    if config_name == "SVR":
+    if config_name == "svr":
         model_name = "SVR"
-        kernel = "rbf"
+        kernel = "poly"
         degree = 3
         gamma = "scale"
         coef0 = 0.0
