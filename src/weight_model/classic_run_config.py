@@ -5,7 +5,7 @@ from typing import Union
 import yaml
 
 from sklearn.svm import SVR
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Ridge
 
 
 @dataclass
@@ -34,9 +34,6 @@ class ClassicRunConfig:
 
 @dataclass
 class SvrRunConfig(ClassicRunConfig):
-    # model_name: str
-    # mean_values: list[float]
-    # std_values: list[float]
     kernel: str
     degree: int
     gamma: str
@@ -78,11 +75,30 @@ class LinearRunConfig(ClassicRunConfig):
             positive=self.positive,
         )
 
+@dataclass
+class RidgeRunConfig(ClassicRunConfig):
+    fit_intercept: bool = True
+    copy_X: bool = True
+    max_iter: int = None
+    tol: float = 0.0001
+    solver: str = "auto"
+    positive: bool = False
+    random_state: int = None
 
-def get_classical_run_config(
+    def get_model(self):
+        return Ridge(
+            fit_intercept=self.fit_intercept,
+            copy_X=self.copy_X,
+            positive=self.positive,
+            max_iter=self.max_iter,
+            tol=self.tol,
+            solver=self.solver
+        )
+
+def get_classic_run_config(
     mean: list[float], std: list[float], config_name: str = "svr"
 ) -> ClassicRunConfig:
-    config_names = ["svr", "linear"]
+    config_names = ["svr", "linear", "ridge"]
     exclude_from_run_args = ["mean", "std"]
 
     if config_name not in config_names:
@@ -133,4 +149,28 @@ def get_classical_run_config(
             n_jobs=n_jobs,
             positive=positive,
             exclude_attr_from_run_args=exclude_from_run_args,
+        )
+
+    elif config_name == "ridge":
+        model_name = "Ridge"
+        fit_intercept = True
+        copy_X = True
+        positive = False
+        max_iter = None
+        tol = 0.0001
+        solver = "auto"
+        random_state = None
+
+        return RidgeRunConfig(
+            model_name=model_name,
+            mean_values=mean,
+            std_values=std,
+            exclude_attr_from_run_args=exclude_from_run_args,
+            fit_intercept=fit_intercept,
+            copy_X=copy_X,
+            positive=positive,
+            max_iter=max_iter,
+            tol=tol,
+            solver=solver,
+            random_state=random_state
         )
