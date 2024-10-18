@@ -6,8 +6,7 @@ import yaml
 
 from sklearn.svm import SVR
 from sklearn.linear_model import LinearRegression, Ridge
-from sklearn.ensemble import BaggingRegressor, RandomForestRegressor, GradientBoostingRegressor, \
-    GradientBoostingClassifier
+from sklearn.ensemble import BaggingRegressor, RandomForestRegressor, GradientBoostingRegressor
 
 
 @dataclass
@@ -191,7 +190,7 @@ class GradientBoostingRunConfig(ClassicRunConfig):
 
     def get_model(self):
         model_args = self.get_kwargs()
-        return GradientBoostingClassifier(**model_args)
+        return GradientBoostingRegressor(**model_args)
 
 def get_classic_run_config(
     mean: list[float], std: list[float], config_name: str = "svr"
