@@ -39,7 +39,7 @@ class PretrainedModel(ABC):
         pass
 
     @abstractmethod
-    def get_final_layer(self) -> torch.nn.Module:
+    def get_final_layer_in_features(self) -> int:
         pass
 
     @abstractmethod
@@ -54,8 +54,6 @@ class PretrainedModel(ABC):
 @dataclass
 class RunConfig:
     model_name: str
-    mean_values: list[float]
-    std_values: list[float]
     exclude_attr_from_run_args: list[str]
     loss_function: torch.nn.Module
     initial_lr: float
@@ -120,6 +118,8 @@ class RunConfig:
 
 @dataclass
 class CustomCNNRunConfig(RunConfig):
+    mean_values: list[float]
+    std_values: list[float]
     model: torch.nn.Module
 
     def get_model(self) -> torch.nn.Module:
@@ -136,7 +136,7 @@ class PretrainedCNNRunConfig(RunConfig):
     def get_model(self) -> torch.nn.Module:
         pretrained_model = self.model()
         conv1 = pretrained_model.get_conv1()
-        final_layer = pretrained_model.get_final_layer()
+        final_input_features_num = pretrained_model.get_final_layer_in_features()
 
         if self.num_channels > 3:
             if self.num_channels % 3 != 0:
@@ -171,7 +171,7 @@ class PretrainedCNNRunConfig(RunConfig):
             # Replace the old conv1 layer with the new one
             pretrained_model.set_first_layer(new_conv1)
 
-        new_final_layer = torch.nn.Linear(final_layer.in_features, 1)
+        new_final_layer = torch.nn.Linear(final_input_features_num, 1)
         pretrained_model.set_final_layer(new_final_layer)
 
         model = pretrained_model.model
@@ -210,6 +210,8 @@ def get_run_config(
         "patience": 15,
         "delta": 0.01,
         "batch_size": 64,
+        "lr_scheduler": None,
+        "exclude_attr_from_run_args": ["mean_values", "std_values"]
     }
 
     if config_name == "resnet":
@@ -224,7 +226,7 @@ def get_run_config(
             "model": ResNet18,
             "stack_three_channels": True,
             "num_channels": 3,
-            "transforms_train": transforms_train,
+            "transforms_train": v2.Compose(transforms_train),
             "transforms_test": v2.Compose(
                 [v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
             ),
@@ -243,7 +245,7 @@ def get_run_config(
             "model": MobileNetV3Small,
             "stack_three_channels": True,
             "num_channels": 3,
-            "transforms_train": transforms_train,
+            "transforms_train": v2.Compose(transforms_train),
             "transforms_test": v2.Compose(
                 [v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
             ),
@@ -259,8 +261,10 @@ def get_run_config(
             "model_name": "custom_cnn_4",
             "model": CNNModel_4,
             "stack_three_channels": False,
+            "mean_values": mean,
+            "std_values": std,
             "num_channels": num_channels,
-            "transforms_train": transforms_train,
+            "transforms_train": v2.Compose(transforms_train),
             "transforms_test": v2.Compose([v2.Normalize(mean=mean, std=std)]),
         }
         return CustomCNNRunConfig(**config_args)
@@ -273,8 +277,10 @@ def get_run_config(
             "model_name": "custom_cnn_2",
             "model": CNNModel_2,
             "stack_three_channels": False,
+            "mean_values": mean,
+            "std_values": std,
             "num_channels": num_channels,
-            "transforms_train": transforms_train,
+            "transforms_train": v2.Compose(transforms_train),
             "transforms_test": v2.Compose([v2.Normalize(mean=mean, std=std)]),
         }
         return CustomCNNRunConfig(**config_args)
@@ -287,8 +293,8 @@ class ResNet18(PretrainedModel):
     def get_conv1(self) -> torch.nn.Module:
         return self.model.conv1
 
-    def get_final_layer(self) -> torch.nn.Module:
-        return self.model.fc
+    def get_final_layer_in_features(self) -> int:
+        return self.model.fc.in_features
 
     def set_first_layer(self, new_layer: torch.nn.Module):
         self.model.conv1 = new_layer
@@ -306,11 +312,11 @@ class MobileNetV3Small(PretrainedModel):
     def get_conv1(self) -> torch.nn.Module:
         return self.model.features[0][0]
 
-    def get_final_layer(self) -> torch.nn.Module:
-        return self.model.classifier
+    def get_final_layer_in_features(self) -> int:
+        return self.model.classifier[0].in_features
 
     def set_first_layer(self, new_layer: torch.nn.Module):
         self.model.features[0][0] = new_layer
 
     def set_final_layer(self, new_layer: torch.nn.Module):
-        self.model.classifier = torch.nn.Linear(self.model.classifier[0].in_features, 1)
+        self.model.classifier = new_layer

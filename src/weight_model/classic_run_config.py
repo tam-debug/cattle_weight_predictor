@@ -178,7 +178,7 @@ def get_classic_run_config(
         "random_forest",
         "gradient_boosting",
     ]
-    exclude_from_run_args = ["mean", "std"]
+    exclude_from_run_args = ["mean_values", "std_values"]
 
     if config_name not in config_names:
         raise ValueError(f"{config_name} must be either {config_names}")
