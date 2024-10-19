@@ -81,7 +81,9 @@ class EarlyStopping:
         elif score < self.best_score + self.delta:
             self.counter += 1
             if self.verbose:
-                logger.info(f"EarlyStopping counter: {self.counter} out of {self.patience}")
+                logger.info(
+                    f"EarlyStopping counter: {self.counter} out of {self.patience}"
+                )
             if self.counter >= self.patience:
                 self.early_stop = True
         else:
@@ -167,7 +169,9 @@ def run_regression(
 
     model = run_config.get_model()
     optimiser = run_config.get_optimiser(model)
-    run_config.save_run_args(input_dir=input_dir, results_dir=results_dir, optimiser=optimiser)
+    run_config.save_run_args(
+        input_dir=input_dir, results_dir=results_dir, optimiser=optimiser
+    )
 
     train_loader = _prepare_data(
         X=X_train,
@@ -175,7 +179,7 @@ def run_regression(
         transform=run_config.transforms_train,
         shuffle=True,
         stack_three_channels=run_config.stack_three_channels,
-        batch_size=run_config.batch_size
+        batch_size=run_config.batch_size,
     )
     test_loader = _prepare_data(
         X=X_test,
@@ -183,7 +187,7 @@ def run_regression(
         transform=run_config.transforms_test,
         shuffle=False,
         stack_three_channels=run_config.stack_three_channels,
-        batch_size=run_config.batch_size
+        batch_size=run_config.batch_size,
     )
     early_stopping = EarlyStopping(
         patience=run_config.patience,
@@ -202,8 +206,13 @@ def run_regression(
         lr_scheduler=run_config.lr_scheduler,
     )
 
-    _save_loss(losses=training_results.training_loss, file_path=results_dir/"train_loss.csv")
-    _save_loss(losses=training_results.validation_loss, file_path=results_dir/"validation_loss.csv")
+    _save_loss(
+        losses=training_results.training_loss, file_path=results_dir / "train_loss.csv"
+    )
+    _save_loss(
+        losses=training_results.validation_loss,
+        file_path=results_dir / "validation_loss.csv",
+    )
 
     plot_loss(
         training_results.training_loss,
@@ -230,8 +239,9 @@ def run_regression(
 
     return metrics
 
+
 def _save_loss(losses: list[float], file_path: Path):
-    with open(file_path, 'w', newline='') as file:
+    with open(file_path, "w", newline="") as file:
         writer = csv.writer(file)
         for loss in losses:
             writer.writerow([loss])
@@ -243,7 +253,7 @@ def _prepare_data(
     transform: v2.Compose,
     shuffle: bool,
     stack_three_channels: bool,
-    batch_size: int
+    batch_size: int,
 ) -> DataLoader:
     if stack_three_channels:
         X = _stack_three_channels(X)
@@ -285,7 +295,7 @@ def _train(
     optimiser: torch.optim.Optimizer,
     loss_function,
     early_stopping: EarlyStopping,
-    lr_scheduler, #: Optional[torch.optim.lr_scheduler.LRScheduler],
+    lr_scheduler,  #: Optional[torch.optim.lr_scheduler.LRScheduler],
     epochs: int = 100,
 ) -> TrainingResults:
     """
@@ -294,6 +304,8 @@ def _train(
 
     training_results = TrainingResults(model)
     best_loss = None
+    loss_function = loss_function()
+
     model.train()
     for epoch in range(epochs):
         train_loss = 0.0

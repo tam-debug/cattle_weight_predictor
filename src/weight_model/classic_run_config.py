@@ -6,7 +6,11 @@ import yaml
 
 from sklearn.svm import SVR
 from sklearn.linear_model import LinearRegression, Ridge
-from sklearn.ensemble import BaggingRegressor, RandomForestRegressor, GradientBoostingRegressor
+from sklearn.ensemble import (
+    BaggingRegressor,
+    RandomForestRegressor,
+    GradientBoostingRegressor,
+)
 
 
 @dataclass
@@ -33,8 +37,16 @@ class ClassicRunConfig:
             yaml.dump(args, file, default_flow_style=False)
 
     def get_kwargs(self):
-        exclude_keys = ["model_name", "mean_values", "std_values", "exclude_attr_from_run_args"]
+        exclude_keys = [
+            "model_name",
+            "mean_values",
+            "std_values",
+            "exclude_attr_from_run_args",
+        ]
         kwargs = vars(self).copy()
+        for key in exclude_keys:
+            if key in kwargs.keys():
+                del kwargs[key]
         return kwargs
 
 
@@ -52,18 +64,8 @@ class SvrRunConfig(ClassicRunConfig):
     max_iter: int
 
     def get_model(self):
-        return SVR(
-            kernel=self.kernel,
-            degree=self.degree,
-            gamma=self.gamma,
-            coef0=self.coef0,
-            tol=self.tol,
-            C=self.C,
-            epsilon=self.epsilon,
-            shrinking=self.shrinking,
-            cache_size=self.cache_size,
-            max_iter=self.max_iter,
-        )
+        model_args = self.get_kwargs()
+        return SVR(**model_args)
 
 
 @dataclass
@@ -74,12 +76,9 @@ class LinearRunConfig(ClassicRunConfig):
     positive: bool = False
 
     def get_model(self):
-        return LinearRegression(
-            fit_intercept=self.fit_intercept,
-            copy_X=self.copy_X,
-            n_jobs=self.n_jobs,
-            positive=self.positive,
-        )
+        model_args = self.get_kwargs()
+        return LinearRegression(**model_args)
+
 
 @dataclass
 class RidgeRunConfig(ClassicRunConfig):
@@ -92,14 +91,9 @@ class RidgeRunConfig(ClassicRunConfig):
     random_state: int = None
 
     def get_model(self):
-        return Ridge(
-            fit_intercept=self.fit_intercept,
-            copy_X=self.copy_X,
-            positive=self.positive,
-            max_iter=self.max_iter,
-            tol=self.tol,
-            solver=self.solver
-        )
+        model_args = self.get_kwargs()
+        return Ridge(**model_args)
+
 
 @dataclass
 class BaggingRunConfig(ClassicRunConfig):
@@ -115,19 +109,12 @@ class BaggingRunConfig(ClassicRunConfig):
     random_state: int = None
 
     def get_model(self):
-        estimator = self.estimator_run_config.get_model() if self.estimator_run_config else None
-        return BaggingRegressor(
-            estimator=estimator,
-            n_estimators=self.n_estimators,
-            max_samples=self.max_samples,
-            max_features=self.max_features,
-            bootstrap=self.bootstrap,
-            bootstrap_features=self.bootstrap_features,
-            oob_score=self.oob_score,
-            warm_start=self.warm_start,
-            n_jobs=self.n_jobs,
-            random_state=self.random_state
+        model_args = self.get_kwargs()
+        model_args["estimator"] = (
+            self.estimator_run_config.get_model() if self.estimator_run_config else None
         )
+        return BaggingRegressor(**model_args)
+
 
 @dataclass
 class RandomForestRunConfig(ClassicRunConfig):
@@ -149,22 +136,9 @@ class RandomForestRunConfig(ClassicRunConfig):
     max_samples: int = None
 
     def get_model(self):
-        return RandomForestRegressor(
-            n_estimators=self.n_estimators,
-            criterion=self.criterion,
-            max_depth=self.max_depth,
-            min_samples_split=self.min_samples_split,
-            min_samples_leaf=self.min_samples_leaf,
-            max_leaf_nodes=self.max_leaf_nodes,
-            min_impurity_decrease=self.min_impurity_decrease,
-            bootstrap=self.bootstrap,
-            oob_score=self.oob_score,
-            n_jobs=self.n_jobs,
-            random_state=self.random_state,
-            warm_start=self.warm_start,
-            ccp_alpha=self.ccp_alpha,
-            max_samples=self.max_samples
-        )
+        model_args = self.get_kwargs()
+        return RandomForestRegressor(**model_args)
+
 
 @dataclass
 class GradientBoostingRunConfig(ClassicRunConfig):
@@ -172,7 +146,7 @@ class GradientBoostingRunConfig(ClassicRunConfig):
     learning_rate: float = 0.1
     n_estimators: int = 100
     subsample: float = 1
-    criterion: str = 'friedman_mse'
+    criterion: str = "friedman_mse"
     min_samples_split: int = 2
     min_samples_leaf: int = 1
     min_weight_fraction_leaf: float = 0.0
@@ -192,10 +166,18 @@ class GradientBoostingRunConfig(ClassicRunConfig):
         model_args = self.get_kwargs()
         return GradientBoostingRegressor(**model_args)
 
+
 def get_classic_run_config(
     mean: list[float], std: list[float], config_name: str = "svr"
 ) -> ClassicRunConfig:
-    config_names = ["svr", "linear", "ridge", "bagging", "random_forest", "gradient_boosting"]
+    config_names = [
+        "svr",
+        "linear",
+        "ridge",
+        "bagging",
+        "random_forest",
+        "gradient_boosting",
+    ]
     exclude_from_run_args = ["mean", "std"]
 
     if config_name not in config_names:
@@ -269,12 +251,12 @@ def get_classic_run_config(
             max_iter=max_iter,
             tol=tol,
             solver=solver,
-            random_state=random_state
+            random_state=random_state,
         )
 
     elif config_name == "bagging":
         model_name = "BaggingRegressor"
-        # By default uses the Decision Tree Regressor as base estimator
+        # By default, uses the Decision Tree Regressor as base estimator
         return BaggingRunConfig(
             model_name=model_name,
             mean_values=mean,
@@ -289,7 +271,7 @@ def get_classic_run_config(
             mean_values=mean,
             std_values=std,
             exclude_attr_from_run_args=exclude_from_run_args,
-            n_estimators=n_estimators
+            n_estimators=n_estimators,
         )
     elif config_name == "gradient_boosting":
         model_name = "GradientBoostingRegressor"
