@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 from sklearn.model_selection import KFold
 
-from weight_model.depth_masks import load_dataset
+from weight_model.mask_mappings import load_dataset
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,7 @@
 """
-Generates the segmentation masks from the segmentation model.
+Loads or generates the segmentation masks from the segmentation model.
 """
+
 import os.path
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,13 +14,47 @@ from ultralytics import YOLO
 from ultralytics.engine.results import Results
 from utils.utils import parse_json
 
+
 @dataclass
 class ImageSegmentationMasks:
     masks: torch.Tensor
     original_hw: tuple[int, int]
-    
-def load_prelabel_masks(directory: Path, start_num: int, end_num: int) -> dict[int, ImageSegmentationMasks]:
-    """Load the AnyLabeling json segmentation files as a binary mark."""
+
+
+def load_seg_mask_tensors(
+    tensor_dir: Path, start_num: int, end_num: int
+) -> dict[int, ImageSegmentationMasks]:
+    """
+    Load the segmentation masks that were stored as PyTorch tensors in .pt files.
+    :param tensor_dir: The directory that contains the tensor files.
+    :param start_num: The start number of the file to load.
+    :param end_num: The end number of the file to load.
+    :return: The segmentation masks with their corresponding image number.
+    """
+    image_masks = {}
+
+    for i in range(start_num, end_num + 1):
+        raw = torch.load(tensor_dir / f"{i}.pt")
+
+        image_masks[i] = ImageSegmentationMasks(
+            masks=raw["masks"], original_hw=raw["original_hw"]
+        )
+
+    return image_masks
+
+
+def load_prelabel_masks(
+    directory: Path, start_num: int, end_num: int
+) -> dict[int, ImageSegmentationMasks]:
+    """
+    Load the AnyLabeling JSON segmentation files as a binary mark.
+
+    :param directory: The directory that contains the files to load.
+    :param start_num: The start number of the file to load.
+    :param end_num: The end number of the file to load.
+    :return: The segmentation masks.
+    """
+
     seg_masks = {}
     for i in range(start_num, end_num + 1):
         dictionary = parse_json(directory / f"{i}.json")
@@ -42,9 +77,14 @@ def load_prelabel_masks(directory: Path, start_num: int, end_num: int) -> dict[i
 
     return seg_masks
 
+
 def generate_masks(
-    model_path: str, images: Union[Path, list[Path]], project: Path = None, name: str = None, save_tensors: bool = False
-) -> dict[Path, ImageSegmentationMasks]:
+    model_path: str,
+    images: Union[Path, list[Path]],
+    project: Path = None,
+    name: str = None,
+    save_tensors: bool = False,
+) -> dict[int, ImageSegmentationMasks]:
     """
     Generates the segmentation masks for the given images.
 
@@ -52,61 +92,36 @@ def generate_masks(
 
     :param model_path: The model to use to generate the segmentation masks.
     :param images: The image directory or list of images to generate the segmentation masks for.
+    :param project: The parent directory where the prediction results are stored.
+    :param name: The directory under the project where the prediction results are stored.
+    :param save_tensors: Whether to save the segmentation mask tensors as .pt files.
     :return: The image path, and its corresponding segmentation masks.
     """
     image_masks = {}
-    prediction_results = predict(model_path, images, project=project, name=name)
+    prediction_results = _predict(model_path, images, project=project, name=name)
     for result in prediction_results:
         image_path = Path(result.path)
+        image_number = int(image_path.stem)
         masks = result.masks.data
         original_hw = result.orig_shape
 
         seg_masks = ImageSegmentationMasks(masks, original_hw)
-        image_masks[image_path] = seg_masks
+        image_masks[image_number] = seg_masks
 
     if save_tensors:
-        _save_seg_masks(
-            project=project / name,
-            masks=image_masks
-        )
+        _save_seg_masks(project=project / name, masks=image_masks)
 
     return image_masks
 
-def load_seg_mask_tensors(tensor_dir: Path, start_num: int, end_num: int) -> dict[Path, ImageSegmentationMasks]:
-    image_masks = {}
 
-    for i in range(start_num, end_num + 1):
-        raw = torch.load(tensor_dir / f"{i}.pt")
-
-        image_masks[i] = ImageSegmentationMasks(
-            masks=raw["masks"],
-            original_hw=raw["original_hw"]
-        )
-
-    return image_masks
-
-def _save_seg_masks(project: Path, masks: dict[Path, ImageSegmentationMasks]):
-
-    save_dir = project / "tensors"
-
-    if not os.path.exists(save_dir):
-        os.mkdir(save_dir)
-
-    for image_path, image_seg_masks in masks.items():
-        save_path = save_dir / f"{image_path.stem}.pt"
-        torch.save({
-            "masks": image_seg_masks.masks,
-            "original_hw": image_seg_masks.original_hw
-        }, save_path)
-
-
-def predict(model_path: str, source: Union[Path, list[Path]], project: Path = None, name: str = None) -> list[Results]:
+def _predict(
+    model_path: str,
+    source: Union[Path, list[Path]],
+    project: Path = None,
+    name: str = None,
+) -> list[Results]:
     """
     Generates segmentation masks for the given image using the given model.
-
-    :param model_path: The path of the model to use.
-    :param source: The path of the image (or list of paths) or image directory to generate the segmentation mask on.
-    :return: List of the results, of which the segmentation masks are stored.
     """
     model = YOLO(model_path)
     if project:
@@ -116,3 +131,22 @@ def predict(model_path: str, source: Union[Path, list[Path]], project: Path = No
     return results
 
 
+def _save_seg_masks(project: Path, masks: dict[int, ImageSegmentationMasks]):
+    """
+    Save the segmentation masks as PyTorch tensors in .pt files.
+    """
+
+    save_dir = project / "tensors"
+
+    if not os.path.exists(save_dir):
+        os.mkdir(save_dir)
+
+    for image_number, image_seg_masks in masks.items():
+        save_path = save_dir / f"{image_number}.pt"
+        torch.save(
+            {
+                "masks": image_seg_masks.masks,
+                "original_hw": image_seg_masks.original_hw,
+            },
+            save_path,
+        )

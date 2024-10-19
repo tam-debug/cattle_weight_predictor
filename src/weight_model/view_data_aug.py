@@ -6,7 +6,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import numpy as np
 
-from weight_model.depth_masks import load_dataset
+from weight_model.mask_mappings import load_dataset
 
 def view_data_aug(depth_masks_path: Path):
     # Example: Load your image as a numpy array
