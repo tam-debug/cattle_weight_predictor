@@ -12,17 +12,17 @@ from typing import Callable
 import torchvision.models.resnet as resnet
 
 from weight_model.custom_model import CNNModel_4, CNNModel_2
+import albumentations as A
 
 logger = logging.getLogger(__name__)
 
 DATA_AUGMENTATIONS = [
-    v2.RandomHorizontalFlip(0.5),
-    v2.RandomRotation(30),
-    v2.RandomResizedCrop(size=(640, 640), scale=(0.8, 1.0)),  # Rescale image
-    v2.RandomAffine(degrees=0, translate=(0.2, 0.2)),
-    v2.RandomPerspective(),
+    A.HorizontalFlip(p=0.5),
+    A.Rotate(limit=30, p=1.0),
+    A.RandomResizedCrop(height=640, width=640, scale=(0.8, 1.0), p=1.0),
+    A.Affine(translate_percent=(0.2, 0.2), p=1.0),
+    A.Perspective(p=1.0),
 ]
-
 
 class PretrainedModel(ABC):
     """
@@ -64,8 +64,8 @@ class RunConfig:
     stack_three_channels: bool
     batch_size: int
     lr_scheduler: torch.optim.lr_scheduler.LRScheduler
-    transforms_train: list
-    transforms_test: list
+    transforms_train: A.Compose
+    transforms_test: A.Compose
     num_channels: int
 
     @abstractmethod
@@ -102,8 +102,6 @@ class RunConfig:
     def get_kwargs(self):
         exclude_keys = [
             "model_name",
-            "mean_values",
-            "std_values",
             "exclude_attr_from_run_args",
         ]
         kwargs = vars(self).copy()
@@ -118,8 +116,6 @@ class RunConfig:
 
 @dataclass
 class CustomCNNRunConfig(RunConfig):
-    mean_values: list[float]
-    std_values: list[float]
     model: torch.nn.Module
 
     def get_model(self) -> torch.nn.Module:
@@ -215,10 +211,9 @@ def get_run_config(
     }
 
     if config_name == "resnet":
+        transforms_test = [A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
         transforms_train = DATA_AUGMENTATIONS
-        transforms_train.append(
-            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        )
+        transforms_train.extend(transforms_test)
 
         config_args = {
             **default_args,
@@ -226,62 +221,58 @@ def get_run_config(
             "model": ResNet18,
             "stack_three_channels": True,
             "num_channels": 3,
-            "transforms_train": v2.Compose(transforms_train),
-            "transforms_test": v2.Compose(
-                [v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
-            ),
+            "transforms_train": A.Compose(transforms_train),
+            "transforms_test": A.Compose(transforms_test),
         }
 
         return PretrainedCNNRunConfig(**config_args)
 
     elif config_name == "mobilenet":
+        transforms_test = [A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
         transforms_train = DATA_AUGMENTATIONS
-        transforms_train.append(
-            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        )
+        transforms_train.extend(transforms_test)
+
         config_args = {
             **default_args,
             "model_name": "mobilenet_v3_small",
             "model": MobileNetV3Small,
             "stack_three_channels": True,
             "num_channels": 3,
-            "transforms_train": v2.Compose(transforms_train),
-            "transforms_test": v2.Compose(
-                [v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
-            ),
+            "transforms_train": A.Compose(transforms_train),
+            "transforms_test": A.Compose(transforms_test),
         }
 
         return PretrainedCNNRunConfig(**config_args)
 
     elif config_name == "custom_4":
+        transforms_test = [A.Normalize(mean=mean, std=std)]
         transforms_train = DATA_AUGMENTATIONS
-        transforms_train.append(v2.Normalize(mean=mean, std=std))
+        transforms_train.extend(transforms_test)
+
         config_args = {
             **default_args,
             "model_name": "custom_cnn_4",
             "model": CNNModel_4,
             "stack_three_channels": False,
-            "mean_values": mean,
-            "std_values": std,
             "num_channels": num_channels,
-            "transforms_train": v2.Compose(transforms_train),
-            "transforms_test": v2.Compose([v2.Normalize(mean=mean, std=std)]),
+            "transforms_train": A.Compose(transforms_train),
+            "transforms_test": A.Compose(transforms_test),
         }
         return CustomCNNRunConfig(**config_args)
 
     elif config_name == "custom_2":
+        transforms_test = [A.Normalize(mean=mean, std=std)]
         transforms_train = DATA_AUGMENTATIONS
-        transforms_train.append(v2.Normalize(mean=mean, std=std))
+        transforms_train.extend(transforms_test)
+
         config_args = {
             **default_args,
             "model_name": "custom_cnn_2",
             "model": CNNModel_2,
             "stack_three_channels": False,
-            "mean_values": mean,
-            "std_values": std,
             "num_channels": num_channels,
-            "transforms_train": v2.Compose(transforms_train),
-            "transforms_test": v2.Compose([v2.Normalize(mean=mean, std=std)]),
+            "transforms_train": A.Compose(transforms_train),
+            "transforms_test": A.Compose(transforms_test),
         }
         return CustomCNNRunConfig(**config_args)
 

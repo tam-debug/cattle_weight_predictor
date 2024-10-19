@@ -11,14 +11,24 @@ from sklearn.ensemble import (
     RandomForestRegressor,
     GradientBoostingRegressor,
 )
+import albumentations as A
+
+# Define the augmentations
+AUGMENTATIONS = [
+    A.HorizontalFlip(p=0.5),
+    A.Rotate(limit=30, p=1.0),
+    A.RandomResizedCrop(height=640, width=640, scale=(0.8, 1.0), p=1.0),
+    A.Affine(translate_percent=(0.2, 0.2), p=1.0),
+    A.Perspective(p=1.0),
+]
 
 
 @dataclass
 class ClassicRunConfig:
     model_name: str
-    mean_values: list[float]
-    std_values: list[float]
     exclude_attr_from_run_args: list[str]
+    transforms_train: A.Compose
+    transforms_test: A.Compose
 
     @abstractmethod
     def get_model(self):
@@ -39,8 +49,6 @@ class ClassicRunConfig:
     def get_kwargs(self):
         exclude_keys = [
             "model_name",
-            "mean_values",
-            "std_values",
             "exclude_attr_from_run_args",
         ]
         kwargs = vars(self).copy()
@@ -183,6 +191,10 @@ def get_classic_run_config(
     if config_name not in config_names:
         raise ValueError(f"{config_name} must be either {config_names}")
 
+    transforms_test = [A.Normalize(mean=mean, std=std)]
+    transforms_train = AUGMENTATIONS
+    transforms_train.extend(transforms_test)
+
     if config_name == "svr":
         model_name = "SVR"
         kernel = "poly"
@@ -198,8 +210,8 @@ def get_classic_run_config(
 
         return SvrRunConfig(
             model_name=model_name,
-            mean_values=mean,
-            std_values=std,
+            transforms_train=A.Compose(transforms_train),
+            transforms_test=A.Compose(transforms_test),
             kernel=kernel,
             degree=degree,
             gamma=gamma,
@@ -221,8 +233,8 @@ def get_classic_run_config(
 
         return LinearRunConfig(
             model_name=model_name,
-            mean_values=mean,
-            std_values=std,
+            transforms_train=A.Compose(transforms_train),
+            transforms_test=A.Compose(transforms_test),
             fit_intercept=fit_intercept,
             copy_X=copy_X,
             n_jobs=n_jobs,
@@ -242,8 +254,8 @@ def get_classic_run_config(
 
         return RidgeRunConfig(
             model_name=model_name,
-            mean_values=mean,
-            std_values=std,
+            transforms_train=A.Compose(transforms_train),
+            transforms_test=A.Compose(transforms_test),
             exclude_attr_from_run_args=exclude_from_run_args,
             fit_intercept=fit_intercept,
             copy_X=copy_X,
@@ -259,8 +271,8 @@ def get_classic_run_config(
         # By default, uses the Decision Tree Regressor as base estimator
         return BaggingRunConfig(
             model_name=model_name,
-            mean_values=mean,
-            std_values=std,
+            transforms_train=A.Compose(transforms_train),
+            transforms_test=A.Compose(transforms_test),
             exclude_attr_from_run_args=exclude_from_run_args,
         )
     elif config_name == "random_forest":
@@ -268,8 +280,8 @@ def get_classic_run_config(
         n_estimators = 50
         return RandomForestRunConfig(
             model_name=model_name,
-            mean_values=mean,
-            std_values=std,
+            transforms_train=A.Compose(transforms_train),
+            transforms_test=A.Compose(transforms_test),
             exclude_attr_from_run_args=exclude_from_run_args,
             n_estimators=n_estimators,
         )
@@ -277,7 +289,7 @@ def get_classic_run_config(
         model_name = "GradientBoostingRegressor"
         return GradientBoostingRunConfig(
             model_name=model_name,
-            mean_values=mean,
-            std_values=std,
+            transforms_train=A.Compose(transforms_train),
+            transforms_test=A.Compose(transforms_test),
             exclude_attr_from_run_args=exclude_from_run_args,
         )

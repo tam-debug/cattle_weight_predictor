@@ -42,7 +42,8 @@ class CustomDataset(Dataset):
         _y = self.y[idx]
 
         if self.transform:
-            x = self.transform(x)
+            x = self.transform(image=x)
+            x = x["image"]
 
         return x, _y.clone().detach().to(
             torch.float32

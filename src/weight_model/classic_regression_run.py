@@ -1,6 +1,7 @@
 import logging
 import os
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 
@@ -32,6 +33,13 @@ def scale_using_stored_values(depth_masks: np.ndarray, mean_list: list, std_list
 
     return scaled_mask
 
+def transform_input(input_batch, transforms_function: Callable) -> np.ndarray:
+    augmented_images = []
+    for image in input_batch:
+        # Apply augmentations
+        augmented = transforms_function(image=image)
+        augmented_images.append(augmented['image'])
+    return np.array(augmented_images)
 
 def run_classic_regression_folds(
     data_path: Path, results_dir: Path, run_config: ClassicRunConfig
@@ -81,19 +89,11 @@ def run_classic_regression(
     if not os.path.exists(results_dir):
         os.mkdir(results_dir)
 
-    X_train_scaled = scale_using_stored_values(
-        depth_masks=X_train,
-        mean_list=run_config.mean_values,
-        std_list=run_config.std_values,
-    )
-    X_test_scaled = scale_using_stored_values(
-        depth_masks=X_test,
-        mean_list=run_config.mean_values,
-        std_list=run_config.std_values,
-    )
+    X_train = transform_input(input_batch=X_train, transforms_function=run_config.transforms_train)
+    X_test = transform_input(input_batch=X_test, transforms_function=run_config.transforms_test)
 
-    X_train_flat = X_train_scaled.reshape(len(X_train_scaled), -1)
-    X_test_flat = X_test_scaled.reshape(len(X_test_scaled), -1)
+    X_train_flat = X_train.reshape(len(X_train), -1)
+    X_test_flat = X_test.reshape(len(X_test), -1)
 
     model = run_config.get_model()
     run_config.save_run_args(input_dir=input_dir, results_dir=results_dir)
