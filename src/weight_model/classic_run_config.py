@@ -118,7 +118,7 @@ class BaggingRunConfig(ClassicRunConfig):
 
 @dataclass
 class RandomForestRunConfig(ClassicRunConfig):
-    n_estimators: int = 10
+    n_estimators: int = 50
     criterion: str = "squared_error"
     max_depth: int = None
     min_samples_split: int = 2
@@ -144,7 +144,7 @@ class RandomForestRunConfig(ClassicRunConfig):
 class GradientBoostingRunConfig(ClassicRunConfig):
     loss: str = "squared_error"
     learning_rate: float = 0.1
-    n_estimators: int = 100
+    n_estimators: int = 50
     subsample: float = 1
     criterion: str = "friedman_mse"
     min_samples_split: int = 2
