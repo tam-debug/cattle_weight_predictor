@@ -12,16 +12,15 @@ from typing import Callable
 import torchvision.models.resnet as resnet
 
 from weight_model.custom_model import CNNModel_4, CNNModel_2
-import albumentations as A
 
 logger = logging.getLogger(__name__)
 
 DATA_AUGMENTATIONS = [
-    A.HorizontalFlip(p=0.5),
-    A.Rotate(limit=30, p=1.0),
-    A.RandomResizedCrop(height=640, width=640, scale=(0.8, 1.0), p=1.0),
-    A.Affine(translate_percent=(0.2, 0.2), p=1.0),
-    A.Perspective(p=1.0),
+    v2.RandomHorizontalFlip(0.5),
+    v2.RandomRotation(30),
+    v2.RandomResizedCrop(size=(640, 640), scale=(0.8, 1.0)),
+    v2.RandomAffine(degrees=0, translate=(0.2, 0.2)),
+    v2.RandomPerspective()
 ]
 
 class PretrainedModel(ABC):
@@ -64,8 +63,8 @@ class RunConfig:
     stack_three_channels: bool
     batch_size: int
     lr_scheduler: torch.optim.lr_scheduler.LRScheduler
-    transforms_train: A.Compose
-    transforms_test: A.Compose
+    transforms_train: v2.Compose
+    transforms_test: v2.Compose
     num_channels: int
 
     @abstractmethod
@@ -175,6 +174,21 @@ class PretrainedCNNRunConfig(RunConfig):
         logger.info(model.eval())
         return model
 
+def get_normalise(num_channels: int = None, mean: list = None, std: list = None):
+    mean = [0.485, 0.456, 0.406] if not mean else mean
+    std = [0.229, 0.224, 0.225] if not std else std
+    if num_channels is None or num_channels <= 3:
+        mean, std = mean, std
+    elif num_channels == 6:
+        mean = mean*2
+        std = std*2
+    elif num_channels == 9:
+        mean = mean*3
+        std = std*3
+    else:
+        raise ValueError(f"Number of channels must be 1, 2, 3, 6 or 9 and not {num_channels}")
+    return v2.Normalize(mean=mean, std=std)
+
 
 def get_run_config(
     config_name: str,
@@ -207,12 +221,14 @@ def get_run_config(
         "delta": 0.01,
         "batch_size": 64,
         "lr_scheduler": None,
-        "exclude_attr_from_run_args": ["mean_values", "std_values"]
+        "exclude_attr_from_run_args": ["mean_values", "std_values", "transforms_train", "transforms_test", "exclude_attr_from_run_args"]
     }
+    num_channels = 3 if num_channels is None else num_channels
+
 
     if config_name == "resnet":
-        transforms_test = [A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
-        transforms_train = DATA_AUGMENTATIONS
+        transforms_test = [v2.ToImage(), get_normalise(num_channels)]
+        transforms_train = DATA_AUGMENTATIONS.copy()
         transforms_train.extend(transforms_test)
 
         config_args = {
@@ -220,33 +236,35 @@ def get_run_config(
             "model_name": "resnet_18",
             "model": ResNet18,
             "stack_three_channels": True,
-            "num_channels": 3,
-            "transforms_train": A.Compose(transforms_train),
-            "transforms_test": A.Compose(transforms_test),
+            "patience": 15,
+            "num_channels": num_channels,
+            "transforms_train": v2.Compose(transforms_train),
+            "transforms_test": v2.Compose(transforms_test),
         }
 
         return PretrainedCNNRunConfig(**config_args)
 
     elif config_name == "mobilenet":
-        transforms_test = [A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
-        transforms_train = DATA_AUGMENTATIONS
+        transforms_test = [v2.ToImage(), get_normalise(num_channels)]
+        transforms_train = DATA_AUGMENTATIONS.copy()
         transforms_train.extend(transforms_test)
 
         config_args = {
             **default_args,
             "model_name": "mobilenet_v3_small",
+            "patience": 20,
             "model": MobileNetV3Small,
             "stack_three_channels": True,
-            "num_channels": 3,
-            "transforms_train": A.Compose(transforms_train),
-            "transforms_test": A.Compose(transforms_test),
+            "num_channels": num_channels,
+            "transforms_train": v2.Compose(transforms_train),
+            "transforms_test": v2.Compose(transforms_test),
         }
 
         return PretrainedCNNRunConfig(**config_args)
 
     elif config_name == "custom_4":
-        transforms_test = [A.Normalize(mean=mean, std=std)]
-        transforms_train = DATA_AUGMENTATIONS
+        transforms_test = [v2.Normalize(mean=mean, std=std)]
+        transforms_train = DATA_AUGMENTATIONS.copy()
         transforms_train.extend(transforms_test)
 
         config_args = {
@@ -255,14 +273,14 @@ def get_run_config(
             "model": CNNModel_4,
             "stack_three_channels": False,
             "num_channels": num_channels,
-            "transforms_train": A.Compose(transforms_train),
-            "transforms_test": A.Compose(transforms_test),
+            "transforms_train": v2.Compose(transforms_train),
+            "transforms_test": v2.Compose(transforms_test),
         }
         return CustomCNNRunConfig(**config_args)
 
     elif config_name == "custom_2":
-        transforms_test = [A.Normalize(mean=mean, std=std)]
-        transforms_train = DATA_AUGMENTATIONS
+        transforms_test = [v2.Normalize(mean=mean, std=std)]
+        transforms_train = DATA_AUGMENTATIONS.copy()
         transforms_train.extend(transforms_test)
 
         config_args = {
@@ -271,8 +289,8 @@ def get_run_config(
             "model": CNNModel_2,
             "stack_three_channels": False,
             "num_channels": num_channels,
-            "transforms_train": A.Compose(transforms_train),
-            "transforms_test": A.Compose(transforms_test),
+            "transforms_train": v2.Compose(transforms_train),
+            "transforms_test": v2.Compose(transforms_test),
         }
         return CustomCNNRunConfig(**config_args)
 

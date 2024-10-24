@@ -1,4 +1,5 @@
 from abc import abstractmethod
+import cv2
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Union
@@ -11,15 +12,15 @@ from sklearn.ensemble import (
     RandomForestRegressor,
     GradientBoostingRegressor,
 )
-import albumentations as A
+from torchvision.transforms import v2
 
 # Define the augmentations
 AUGMENTATIONS = [
-    A.HorizontalFlip(p=0.5),
-    A.Rotate(limit=30, p=1.0),
-    A.RandomResizedCrop(height=640, width=640, scale=(0.8, 1.0), p=1.0),
-    A.Affine(translate_percent=(0.2, 0.2), p=1.0),
-    A.Perspective(p=1.0),
+    # v2.RandomHorizontalFlip(0.5),
+    # v2.RandomRotation(30),
+    # v2.RandomResizedCrop(size=(640, 640), scale=(0.8, 1.0)),
+    # v2.RandomAffine(degrees=0, translate=(0.2, 0.2)),
+    # v2.RandomPerspective()
 ]
 
 
@@ -27,8 +28,8 @@ AUGMENTATIONS = [
 class ClassicRunConfig:
     model_name: str
     exclude_attr_from_run_args: list[str]
-    transforms_train: A.Compose
-    transforms_test: A.Compose
+    transforms_train: v2.Compose
+    transforms_test: v2.Compose
 
     @abstractmethod
     def get_model(self):
@@ -42,6 +43,7 @@ class ClassicRunConfig:
         for key in self.exclude_attr_from_run_args:
             if key in args.keys():
                 del args[key]
+        del args["exclude_attr_from_run_args"]
 
         with open(results_dir / "run_args.yaml", "w") as file:
             yaml.dump(args, file, default_flow_style=False)
@@ -50,6 +52,8 @@ class ClassicRunConfig:
         exclude_keys = [
             "model_name",
             "exclude_attr_from_run_args",
+            "transforms_train",
+            "transforms_test",
         ]
         kwargs = vars(self).copy()
         for key in exclude_keys:
@@ -176,7 +180,7 @@ class GradientBoostingRunConfig(ClassicRunConfig):
 
 
 def get_classic_run_config(
-    mean: list[float], std: list[float], config_name: str = "svr"
+    config_name: str, mean: list[float] = None, std: list[float] = None
 ) -> ClassicRunConfig:
     config_names = [
         "svr",
@@ -186,14 +190,15 @@ def get_classic_run_config(
         "random_forest",
         "gradient_boosting",
     ]
-    exclude_from_run_args = ["mean_values", "std_values"]
+    exclude_from_run_args = ["transforms_train", "transforms_test"]
 
     if config_name not in config_names:
         raise ValueError(f"{config_name} must be either {config_names}")
 
-    transforms_test = [A.Normalize(mean=mean, std=std)]
-    transforms_train = AUGMENTATIONS
-    transforms_train.extend(transforms_test)
+    transforms_test = [v2.Normalize(mean=mean, std=std)] if mean else None
+    transforms_train = AUGMENTATIONS.copy()
+    if transforms_test:
+        transforms_train.extend(transforms_test)
 
     if config_name == "svr":
         model_name = "SVR"
@@ -210,8 +215,8 @@ def get_classic_run_config(
 
         return SvrRunConfig(
             model_name=model_name,
-            transforms_train=A.Compose(transforms_train),
-            transforms_test=A.Compose(transforms_test),
+            transforms_train=v2.Compose(transforms_train) if len(transforms_train) > 0 else None,
+            transforms_test=v2.Compose(transforms_test) if transforms_test else None,
             kernel=kernel,
             degree=degree,
             gamma=gamma,
@@ -226,19 +231,11 @@ def get_classic_run_config(
         )
     elif config_name == "linear":
         model_name = "LinearRegression"
-        fit_intercept = True
-        copy_X = True
-        n_jobs = None
-        positive = False
 
         return LinearRunConfig(
             model_name=model_name,
-            transforms_train=A.Compose(transforms_train),
-            transforms_test=A.Compose(transforms_test),
-            fit_intercept=fit_intercept,
-            copy_X=copy_X,
-            n_jobs=n_jobs,
-            positive=positive,
+            transforms_train=v2.Compose(transforms_train) if len(transforms_train) > 0 else None,
+            transforms_test=v2.Compose(transforms_test) if transforms_test else None,
             exclude_attr_from_run_args=exclude_from_run_args,
         )
 
@@ -254,8 +251,8 @@ def get_classic_run_config(
 
         return RidgeRunConfig(
             model_name=model_name,
-            transforms_train=A.Compose(transforms_train),
-            transforms_test=A.Compose(transforms_test),
+            transforms_train=v2.Compose(transforms_train) if len(transforms_train) > 0 else None,
+            transforms_test=v2.Compose(transforms_test) if transforms_test else None,
             exclude_attr_from_run_args=exclude_from_run_args,
             fit_intercept=fit_intercept,
             copy_X=copy_X,
@@ -271,25 +268,23 @@ def get_classic_run_config(
         # By default, uses the Decision Tree Regressor as base estimator
         return BaggingRunConfig(
             model_name=model_name,
-            transforms_train=A.Compose(transforms_train),
-            transforms_test=A.Compose(transforms_test),
+            transforms_train=v2.Compose(transforms_train) if len(transforms_train) > 0 else None,
+            transforms_test=v2.Compose(transforms_test) if transforms_test else None,
             exclude_attr_from_run_args=exclude_from_run_args,
         )
     elif config_name == "random_forest":
         model_name = "RandomForestRegressor"
-        n_estimators = 50
         return RandomForestRunConfig(
             model_name=model_name,
-            transforms_train=A.Compose(transforms_train),
-            transforms_test=A.Compose(transforms_test),
+            transforms_train=v2.Compose(transforms_train) if len(transforms_train) > 0 else None,
+            transforms_test=v2.Compose(transforms_test) if transforms_test else None,
             exclude_attr_from_run_args=exclude_from_run_args,
-            n_estimators=n_estimators,
         )
     elif config_name == "gradient_boosting":
         model_name = "GradientBoostingRegressor"
         return GradientBoostingRunConfig(
             model_name=model_name,
-            transforms_train=A.Compose(transforms_train),
-            transforms_test=A.Compose(transforms_test),
+            transforms_train=v2.Compose(transforms_train) if len(transforms_train) > 0 else None,
+            transforms_test=v2.Compose(transforms_test) if transforms_test else None,
             exclude_attr_from_run_args=exclude_from_run_args,
         )

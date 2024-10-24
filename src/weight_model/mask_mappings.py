@@ -82,11 +82,19 @@ def load_dataset(file_paths: list[Path]) -> tuple[np.ndarray, np.ndarray]:
         else:
             masks.append(_masks)
 
-    if len(masks) > 1:  # TODO: Use concatenate for RGB masks
-        masks = np.stack(masks, axis=1)
+    if len(masks) > 1:
+        if len(masks[0].shape) == 4:
+            masks = np.concatenate(masks, axis=-1)
+            masks = masks.transpose(0, 3, 1, 2)
+        else:
+            masks = np.stack(masks, axis=1)
     else:
-        masks = np.array(masks)
-        masks = masks.transpose(1, 0, 2, 3)  # TODO: Check with RGB
+        if len(masks[0].shape) == 4:
+            masks = masks[0]
+            masks = masks.transpose(0, 3, 1, 2)
+        else:
+            masks = np.array(masks)
+            masks = masks.transpose(1, 0, 2, 3)
 
     return masks, np.array(weights)
 
@@ -125,12 +133,18 @@ def generate_mask_mappings(
 
     if id_mapping_dir:
         for image_number, _seg_masks in seg_masks.items():
-            seg_masks = _seg_masks.masks
+            seg_masks = _seg_masks.masks.cpu().numpy()
             id_mapping_file = id_mapping_dir / f"{image_number}.json"
 
-            if mask_output_type == MaskOutputType.SEGMENTATION:
-                seg_masks = seg_masks.cpu().numpy()
-            else:
+            seg_mappings = _match_mask_to_weight(
+                seg_masks=seg_masks,
+                weights=weights,
+                id_mapping_file=id_mapping_file,
+                original_scale=_seg_masks.original_hw,
+                rgb_transform_params=rgb_transform_params,
+            )
+
+            if mask_output_type != MaskOutputType.SEGMENTATION:
                 image = _load_image(
                     output_type=mask_output_type,
                     image_number=image_number,
@@ -141,19 +155,15 @@ def generate_mask_mappings(
                     ),
                 )
 
-            seg_mappings = _match_mask_to_weight(
-                seg_masks=seg_masks,
-                weights=weights,
-                id_mapping_file=id_mapping_file,
-                original_scale=_seg_masks.original_hw,
-                rgb_transform_params=rgb_transform_params,
-            )
+                _rgb_mappings = _apply_seg_masks(
+                    seg_mappings=seg_mappings, image=image, scale_to_255=scale_to_255
+                )
 
-            _rgb_mappings = _apply_seg_masks(
-                seg_mappings=seg_mappings, image=image, scale_to_255=scale_to_255
-            )
-
-            mappings.extend(_rgb_mappings)
+                mappings.extend(_rgb_mappings)
+            else:
+                for seg_mapping in seg_mappings:
+                    seg_mapping.mask = _pad_image(seg_mapping.mask)
+                mappings.extend(seg_mappings)
 
     else:
         for image_number, _seg_masks in seg_masks.items():
@@ -187,13 +197,13 @@ def generate_mask_mappings(
     return mappings
 
 
-def print_rgb_masks_mean_and_stddev(
+def print_masks_mean_and_stddev(
     seg_masks: dict[int, ImageSegmentationMasks],
     rgb_image_dir: Path,
     depth_image_dir: Path,
     mask_output_type: MaskOutputType,
     weights_file: Path,
-    rgb_transform_params: RgbTransformParams,
+    rgb_transform_params: RgbTransformParams = None,
     id_mapping_dir: Path = None,
 ):
     """
@@ -214,21 +224,18 @@ def print_rgb_masks_mean_and_stddev(
     values = []
     if id_mapping_dir:
         for image_number, _seg_masks in seg_masks.items():
-            seg_masks = _seg_masks.masks
+            seg_masks = _seg_masks.masks.cpu().numpy()
             id_mapping_file = id_mapping_dir / f"{image_number}.json"
 
-            if mask_output_type == MaskOutputType.SEGMENTATION:
-                seg_masks = seg_masks.cpu().numpy()
-            else:
-                image = _load_image(
-                    output_type=mask_output_type,
-                    image_number=image_number,
-                    image_directory=(
-                        rgb_image_dir
-                        if mask_output_type == MaskOutputType.RGB
-                        else depth_image_dir
-                    ),
-                )
+            image = _load_image(
+                output_type=mask_output_type,
+                image_number=image_number,
+                image_directory=(
+                    rgb_image_dir
+                    if mask_output_type == MaskOutputType.RGB
+                    else depth_image_dir
+                ),
+            )
 
             seg_mappings = _match_mask_to_weight(
                 seg_masks=seg_masks,
@@ -290,12 +297,11 @@ def _load_image(
     """
     Loads the depth or RGB image.
     """
+    file_path = _get_image_name(image_path=image_number, image_dir=image_directory)
 
     if output_type == MaskOutputType.DEPTH:
-        file_path = _get_image_name(image_path=image_number, image_dir=image_directory)
         image = cv2.imread(file_path, cv2.IMREAD_UNCHANGED)
     else:
-        file_path = _get_image_name(image_path=image_number, image_dir=image_directory)
         image = cv2.imread(file_path)
 
     return image
@@ -460,7 +466,10 @@ def _apply_seg_mask(
     if scale_to_255:
         mask_values = _normalise_values(values=np.array(mask_values)) * 255
 
-    output_mask = np.zeros_like(binary_mask, dtype=np.float32)
+    if len(image.shape) == 3 and image.shape[2] == 3:
+        output_mask = np.zeros((binary_mask.shape[0], binary_mask.shape[1], 3), dtype=np.float32)
+    else:
+        output_mask = np.zeros_like(binary_mask, dtype=np.float32)
     coordinates = np.column_stack(np.where(binary_mask == 1))
 
     for i, coord in enumerate(coordinates):
@@ -540,12 +549,20 @@ def _pad_image(
     pad_left = pad_x
     pad_right = width - x - pad_left
 
-    padded_image = np.pad(
-        image,
-        ((pad_top, pad_bottom), (pad_left, pad_right)),
-        mode="constant",
-        constant_values=0,
-    )
+    if len(image.shape) == 3 and image.shape[2] == 3:
+        padded_image = np.pad(
+            image,
+            ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)),
+            mode='constant',
+            constant_values=0
+        )
+    else:
+        padded_image = np.pad(
+            image,
+            ((pad_top, pad_bottom), (pad_left, pad_right)),
+            mode="constant",
+            constant_values=0,
+        )
 
     return padded_image
 

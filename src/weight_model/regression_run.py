@@ -23,6 +23,7 @@ from utils.utils import write_csv_file
 
 logger = logging.getLogger(__name__)
 
+torch.manual_seed(42)
 
 class CustomDataset(Dataset):
     """
@@ -42,8 +43,7 @@ class CustomDataset(Dataset):
         _y = self.y[idx]
 
         if self.transform:
-            x = self.transform(image=x)
-            x = x["image"]
+            x = self.transform(x)
 
         return x, _y.clone().detach().to(
             torch.float32
@@ -259,6 +259,9 @@ def _prepare_data(
     if stack_three_channels:
         X = _stack_three_channels(X)
 
+    if len(y.shape) == 1:
+        y = y.reshape(-1, 1)
+
     dataset = CustomDataset(
         X=torch.from_numpy(X).float(),
         y=torch.from_numpy(y).long(),
@@ -279,11 +282,11 @@ def _stack_three_channels(data: np.ndarray) -> np.ndarray:
     elif data.shape[1] == 2:
         zero_channel = np.zeros((data.shape[0], 1, data.shape[2], data.shape[3]))
         data = np.concatenate((data, zero_channel), axis=1)
-    elif data.shape[1] == 3:
+    elif data.shape[1] in [3, 6, 9]:
         data = data
     else:
         raise ValueError(
-            f"Data channels should be 1, 2 or 3. Depth mask shape is {data.shape}"
+            f"Data channels should be 1, 2, 3, 6 or 9. Depth mask shape is {data.shape}"
         )
 
     return data
@@ -302,7 +305,6 @@ def _train(
     """
     Train the model.
     """
-
     training_results = TrainingResults(model)
     best_loss = None
     loss_function = loss_function()

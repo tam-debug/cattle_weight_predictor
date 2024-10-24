@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Callable
 
 import numpy as np
+import torch
 
 from weight_model.k_fold_builder import load_dataset_folds
 from weight_model.results import ModelRunResults
@@ -13,6 +14,7 @@ from constants.constants import (
     VAL_PREDICTIONS,
     VAL_METRICS,
 )
+torch.manual_seed(42)
 
 
 logger = logging.getLogger(__name__)
@@ -33,13 +35,17 @@ def scale_using_stored_values(depth_masks: np.ndarray, mean_list: list, std_list
 
     return scaled_mask
 
-def transform_input(input_batch, transforms_function: Callable) -> np.ndarray:
+def transform_input(input_batch: np.ndarray, transforms_function: Callable = None) -> np.ndarray:
+    if transforms_function is None:
+        return input_batch
     augmented_images = []
     for image in input_batch:
         # Apply augmentations
-        augmented = transforms_function(image=image)
-        augmented_images.append(augmented['image'])
+        image_tensor = torch.from_numpy(image)
+        augmented = transforms_function(image_tensor)
+        augmented_images.append(augmented.numpy())
     return np.array(augmented_images)
+
 
 def run_classic_regression_folds(
     data_path: Path, results_dir: Path, run_config: ClassicRunConfig
@@ -86,25 +92,26 @@ def run_classic_regression(
     results_dir: Path,
     input_dir: Path,
 ):
+    logger.info(f"Running model: {run_config.model_name}")
     if not os.path.exists(results_dir):
         os.mkdir(results_dir)
 
-    X_train = transform_input(input_batch=X_train, transforms_function=run_config.transforms_train)
-    X_test = transform_input(input_batch=X_test, transforms_function=run_config.transforms_test)
+    X_train_transformed = transform_input(input_batch=X_train.copy(), transforms_function=run_config.transforms_train)
+    X_test_transformed = transform_input(input_batch=X_test.copy(), transforms_function=run_config.transforms_test)
 
-    X_train_flat = X_train.reshape(len(X_train), -1)
-    X_test_flat = X_test.reshape(len(X_test), -1)
+    X_train_flat = X_train_transformed.reshape(len(X_train_transformed), -1)
+    X_test_flat = X_test_transformed.reshape(len(X_test_transformed), -1)
 
     model = run_config.get_model()
     run_config.save_run_args(input_dir=input_dir, results_dir=results_dir)
 
     # Train the model
-    model.fit(X_train_flat, y_train.ravel())
+    model.fit(X_train_flat, y_train.flatten())
 
     # Predict on validation set
     predictions = model.predict(X_test_flat)
 
-    metrics = ModelRunResults(y_true=y_test.ravel(), y_pred=predictions)
+    metrics = ModelRunResults(y_true=y_test.flatten(), y_pred=predictions)
     metrics.write_predictions(file_path=results_dir / VAL_PREDICTIONS)
     metrics.write_metrics(file_path=results_dir / VAL_METRICS)
     metrics.plot_actual_and_predicted_values(
