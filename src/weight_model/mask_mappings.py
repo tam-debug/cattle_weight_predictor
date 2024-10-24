@@ -104,6 +104,7 @@ def generate_mask_mappings(
     save_dir: Path = None,
     id_mapping_dir: Path = None,
     rgb_transform_params: RgbTransformParams = None,
+    use_image_four_digit_id: bool = False
 ) -> list[MaskWeight]:
     """
     Generates the mappings between the masks and weights and applies segmentation masks to create new masks if needed.
@@ -128,6 +129,9 @@ def generate_mask_mappings(
 
     if id_mapping_dir:
         for image_number, _seg_masks in seg_masks.items():
+            if use_image_four_digit_id:
+                image_number = f"{image_number:04}"
+
             seg_masks = _seg_masks.masks.cpu().numpy()
             id_mapping_file = id_mapping_dir / f"{image_number}.json"
 
@@ -307,11 +311,12 @@ def _load_image(
     return image
 
 
-def _get_image_name(image_path: Union[str, int], image_dir: Path):
+def _get_image_name(image_path: Union[str, int], image_dir: Path, file_ext: str = ".jpg"):
     """
     Gets the depth or RGB image name.
     """
-    return image_dir / f"{image_path}.png"
+    # return image_dir / f"{image_path}.png"
+    return image_dir / f"{image_path}{file_ext}"
 
 
 def _match_mask_to_weight(
@@ -353,14 +358,14 @@ def _match_mask_to_weight(
                 new_scale=mask.shape[:2],
             )
 
-            if len(weights.keys()) > 0 and type(weights.keys()) == tuple:
+            if len(weights.keys()) > 0 and type(list(weights.keys())[0]) == tuple:
                 candidate_id = (int(id_mapping_file.stem), cattle_id)
             else:
                 candidate_id = cattle_id
 
             if candidate_id not in matched_ids and mask[map_y][map_x] == 1:
                 matched_ids.add(candidate_id)
-                weight = weights[cattle_id]
+                weight = weights[candidate_id]
                 mappings.append(MaskWeight(mask=mask, weight=weight))
 
     return mappings
