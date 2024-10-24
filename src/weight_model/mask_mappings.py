@@ -14,12 +14,7 @@ from typing import Union, Optional
 import numpy as np
 
 from constants.constants import SCALE_DIMENSION, DEPTH_MASK_DIMENSION
-from segmentation_model.generate_masks import (
-    ImageSegmentationMasks,
-    generate_masks,
-    load_seg_mask_tensors,
-    load_prelabel_masks,
-)
+from segmentation_model.generate_masks import ImageSegmentationMasks
 from segmentation_model.dataset_builder.resize_rgb import RgbTransformParams
 from utils.utils import parse_json, resize_mask, show_mask
 
@@ -287,7 +282,12 @@ def _load_weights(weights_file) -> dict[str, float]:
         for row in csv_reader:
             cattle_id = row["Name"]
             weight = float(row["Weight"])
-            weights[cattle_id] = weight
+            if row.get("Image_Name"):
+                image_name = row["Image_Name"]
+                image_number = int(image_name.split(".")[0])
+                weights[(image_number, cattle_id)] = weight
+            else:
+                weights[cattle_id] = weight
     return weights
 
 
@@ -353,8 +353,13 @@ def _match_mask_to_weight(
                 new_scale=mask.shape[:2],
             )
 
-            if cattle_id not in matched_ids and mask[map_y][map_x] == 1:
-                matched_ids.add(cattle_id)
+            if len(weights.keys()) > 0 and type(weights.keys()) == tuple:
+                candidate_id = (int(id_mapping_file.stem), cattle_id)
+            else:
+                candidate_id = cattle_id
+
+            if candidate_id not in matched_ids and mask[map_y][map_x] == 1:
+                matched_ids.add(candidate_id)
                 weight = weights[cattle_id]
                 mappings.append(MaskWeight(mask=mask, weight=weight))
 
@@ -467,7 +472,9 @@ def _apply_seg_mask(
         mask_values = _normalise_values(values=np.array(mask_values)) * 255
 
     if len(image.shape) == 3 and image.shape[2] == 3:
-        output_mask = np.zeros((binary_mask.shape[0], binary_mask.shape[1], 3), dtype=np.float32)
+        output_mask = np.zeros(
+            (binary_mask.shape[0], binary_mask.shape[1], 3), dtype=np.float32
+        )
     else:
         output_mask = np.zeros_like(binary_mask, dtype=np.float32)
     coordinates = np.column_stack(np.where(binary_mask == 1))
@@ -553,8 +560,8 @@ def _pad_image(
         padded_image = np.pad(
             image,
             ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)),
-            mode='constant',
-            constant_values=0
+            mode="constant",
+            constant_values=0,
         )
     else:
         padded_image = np.pad(
