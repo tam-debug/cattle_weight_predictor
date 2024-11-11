@@ -1,27 +1,22 @@
-from torchvision.transforms import v2
-
 YOLO_MODEL_SIZES = ["n", "s", "m", "l", "x"]
 
-# Default Train
-TRAINING_RESULTS_NAME = "training_results.csv"
+K_FOLD_DATASET_INFO_FILENAME = "k_fold_data_split.csv"
+
 TRAINING_RESULTS_HEADER = [
     "Timestamp",
-    "Model Size",
-    "Mean IOU",
-    "Standard Deviation IOU",
+    "Model Path",
+    "Val Fold Mean IOU",
+    "Val Fold StdDev IOU",
+    "Test Fold Mean IOU",
+    "Test Fold StdDev IOU",
 ]
-TRAINING_MODEL_PARAMS = {
-    "single_cls": True,
-    "epochs": 30,
-    "batch": 100,
-}
 
 # Tune
 ITERATIONS = 300
 HYPERPARAM_ARGS = {
-    "epochs": [1, 100],
-    "patience": 100,
-    "batch": 30,
+    "epochs": [50, 150],
+    "patience": 50,
+    "batch": 50,
     "project": None,
     "name": None,
     "exist_ok": False,
@@ -35,7 +30,7 @@ HYPERPARAM_ARGS = {
     "warmup_epochs": [1, 5],
     "warmup_momentum": [0.5, 1],
     "box": [1, 10],
-    "cls": [0.1, 0.9],
+    "cls": [0.5, 0.9],
 }
 DATA_AUGMENT_ARGS = {
     "hsv_h": [0, 1],
@@ -52,24 +47,41 @@ DATA_AUGMENT_ARGS = {
     "mosaic": [0, 1],
     "mixup": [0, 1],
     "copy_paste": [0, 1],
-    # "auto_augment": ["randaugment", "autoaugment", "augmix"]
+    "auto_augment": ["randaugment", "autoaugment", "augmix"],
     "erasing": [0, 0.9],
     "crop_fraction": [0.1, 1],
 }
-TUNE_RESULTS_PATH = "results/k_fold_tune_with_head.csv"
-BEST_MODEL_RESULTS = "results/best_model.csv"
-TUNE_RESULTS_HEADER = [
+TUNE_TRAIN_RESULTS_FILENAME = "tune_train_results.csv"
+TUNE_TRAIN_RESULTS_HEADER = [
+    "Timestamp",
+    "With Head",
+    "Model Path",
+    "Val Mean IOU",
+    "Val StdDev IOU",
+]
+TUNE_TEST_RESULTS_HEADER = [
+    "Timestamp",
+    "With Head",
+    "Model Path",
+    "Val Mean IOU",
+    "Val StdDev IOU",
+]
+TUNE_TEST_RESULTS_FILENAME = "tune_test_results.csv"
+BEST_MODEL_RESULTS_FILENAME = "best_model.csv"
+BEST_MODEL_RESULTS_HEADER = [
     "Timestamp",
     "With Head",
     "Model_Size",
-    "Model Number",
-    "Mean IOU",
-    "Standard Deviation IOU",
+    "Model Index",
+    "Val Mean IOU",
+    "Val StdDevIOU",
+    "Test Mean IOU",
+    "Test StdDevIOU",
 ]
+
 
 # Validate
 CONFIDENCE_SCORE_THRESHOLD = 0.5
-PREDICTION_FILENAME = "predictions.json"
 
 # TrainTestDataset builder
 IMAGES_DIR = "images"

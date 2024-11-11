@@ -1,2 +1,2 @@
 # cattle_weight_predictor
-Engineering Capstone to predictor cattle weight from images.
+2024 Engineering Capstone to predictor cattle weight from images.
