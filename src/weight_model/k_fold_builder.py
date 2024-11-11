@@ -57,7 +57,7 @@ def create_test_dataset(config_file_path: Path, origin_directory: Path, test_dir
         shutil.move(image_path, test_directory / image_path.name)
         shutil.move(json_path, test_directory / json_path.name)
 
-def generate_k_fold_configuration(n_splits: int, data, json_file_path: Path):
+def generate_k_fold_configuration(n_splits: int, data, json_file_path: Path, random_state: int):
     """
     Generates the k-folds and save them to a json file.
 
@@ -65,7 +65,7 @@ def generate_k_fold_configuration(n_splits: int, data, json_file_path: Path):
     :param data: The data to split.
     :param json_file_path: The file path to save the json file.
     """
-    k_fold = KFold(n_splits=n_splits, shuffle=True, random_state=91231088)
+    k_fold = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
 
     if logger.root.level <= logging.DEBUG:
         for fold, (train_index, test_index) in enumerate(k_fold.split(data)):
