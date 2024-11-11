@@ -34,11 +34,12 @@ def load_seg_mask_tensors(
     image_masks = {}
 
     for i in range(start_num, end_num + 1):
-        raw = torch.load(tensor_dir / f"{i}.pt")
+        if os.path.exists(tensor_dir / f"{i}.pt"):
+            raw = torch.load(tensor_dir / f"{i}.pt")
 
-        image_masks[i] = ImageSegmentationMasks(
-            masks=raw["masks"], original_hw=raw["original_hw"]
-        )
+            image_masks[i] = ImageSegmentationMasks(
+                masks=raw["masks"], original_hw=raw["original_hw"]
+            )
 
     return image_masks
 

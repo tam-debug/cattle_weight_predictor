@@ -4,6 +4,8 @@ Can apply segmentation masks to create new masks such as depth masks and RGB mas
 """
 
 import csv
+import os.path
+
 import cv2
 from dataclasses import dataclass
 from enum import Enum
@@ -204,6 +206,7 @@ def print_masks_mean_and_stddev(
     weights_file: Path,
     rgb_transform_params: RgbTransformParams = None,
     id_mapping_dir: Path = None,
+    use_image_four_digit_id: bool = False
 ):
     """
     Prints the mean and standard deviation of the values in the images that are in the segmentation masks.
@@ -223,6 +226,8 @@ def print_masks_mean_and_stddev(
     values = []
     if id_mapping_dir:
         for image_number, _seg_masks in seg_masks.items():
+            if use_image_four_digit_id:
+                image_number = f"{image_number:04}"
             seg_masks = _seg_masks.masks.cpu().numpy()
             id_mapping_file = id_mapping_dir / f"{image_number}.json"
 
@@ -301,7 +306,15 @@ def _load_image(
     """
     Loads the depth or RGB image.
     """
-    file_path = _get_image_name(image_path=image_number, image_dir=image_directory)
+    file_path = None
+    for file_extension in [".png", ".jpg"]:
+        _file_path = _get_image_name(image_path=image_number, image_dir=image_directory, file_ext=file_extension)
+        if os.path.exists(_file_path):
+            file_path = _file_path
+            break
+
+    if file_path is None:
+        raise ValueError(f"Could not find {image_number} in {image_directory.as_posix()}")
 
     if output_type == MaskOutputType.DEPTH:
         image = cv2.imread(file_path, cv2.IMREAD_UNCHANGED)

@@ -236,6 +236,7 @@ def get_run_config(
             "model_name": "resnet_18",
             "model": ResNet18,
             "stack_three_channels": True,
+            "epochs": 50,
             "patience": 15,
             "num_channels": num_channels,
             "transforms_train": v2.Compose(transforms_train),
@@ -316,6 +317,59 @@ class MobileNetV3Small(PretrainedModel):
     def __init__(self):
         self.model = torchvision.models.mobilenet_v3_small(
             weights=torchvision.models.MobileNet_V3_Small_Weights.IMAGENET1K_V1
+        )
+
+    def get_conv1(self) -> torch.nn.Module:
+        return self.model.features[0][0]
+
+    def get_final_layer_in_features(self) -> int:
+        return self.model.classifier[0].in_features
+
+    def set_first_layer(self, new_layer: torch.nn.Module):
+        self.model.features[0][0] = new_layer
+
+    def set_final_layer(self, new_layer: torch.nn.Module):
+        self.model.classifier = new_layer
+
+class ResNet50(PretrainedModel):
+    def __init__(self):
+        self.model = resnet.resnet34(weights=resnet.ResNet34_Weights.IMAGENET1K_V1)
+
+    def get_conv1(self) -> torch.nn.Module:
+        return self.model.conv1
+
+    def get_final_layer_in_features(self) -> int:
+        return self.model.fc.in_features
+
+    def set_first_layer(self, new_layer: torch.nn.Module):
+        self.model.conv1 = new_layer
+
+    def set_final_layer(self, new_layer: torch.nn.Module):
+        self.model.fc = new_layer
+
+
+class MobileNetV3Small(PretrainedModel):
+    def __init__(self):
+        self.model = torchvision.models.mobilenet_v3_small(
+            weights=torchvision.models.MobileNet_V3_Small_Weights.IMAGENET1K_V1
+        )
+
+    def get_conv1(self) -> torch.nn.Module:
+        return self.model.features[0][0]
+
+    def get_final_layer_in_features(self) -> int:
+        return self.model.classifier[0].in_features
+
+    def set_first_layer(self, new_layer: torch.nn.Module):
+        self.model.features[0][0] = new_layer
+
+    def set_final_layer(self, new_layer: torch.nn.Module):
+        self.model.classifier = new_layer
+
+class MobileNetV3Large(PretrainedModel):
+    def __init__(self):
+        self.model = torchvision.models.mobilenet_v3_large(
+            weights=torchvision.models.MobileNet_V3_Large_Weights.IMAGENET1K_V1
         )
 
     def get_conv1(self) -> torch.nn.Module:

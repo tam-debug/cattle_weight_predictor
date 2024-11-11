@@ -1,12 +1,14 @@
 """
 Methods for handling the k-fold configuration.
 """
-
+import os.path
 from dataclasses import dataclass
 import json
 import logging
 from pathlib import Path
+import shutil
 
+import random
 import numpy as np
 from sklearn.model_selection import KFold
 
@@ -22,6 +24,38 @@ class DatasetFold:
     X_test: np.ndarray
     y_test: np.ndarray
 
+
+def generate_train_test_split(numbers: range, test_proportion: float, file_path: Path):
+    """
+    Generates the configuration for a train and test split.
+    :param numbers: The numbers to split.
+    :param test_proportion: The proportion of the test split.
+    :param file_path: The file path to save the configuration to.
+    """
+
+    test_size = int(test_proportion * len(list(numbers)))
+
+    test_set = random.sample(numbers, test_size)
+    test_set_array = np.array(test_set)
+
+    np.save(file_path, test_set_array)
+
+def create_test_dataset(config_file_path: Path, origin_directory: Path, test_directory: Path):
+    test_config = np.load(config_file_path)
+
+    for id in test_config:
+        id_stem = f"{id:04}"
+        image_path = None
+        for file_ext in [".png", ".jpg"]:
+            _file_path = origin_directory / f"{id_stem}{file_ext}"
+            if os.path.exists(_file_path):
+                image_path = _file_path
+                break
+
+        json_path = origin_directory / f"{id_stem}.json"
+
+        shutil.move(image_path, test_directory / image_path.name)
+        shutil.move(json_path, test_directory / json_path.name)
 
 def generate_k_fold_configuration(n_splits: int, data, json_file_path: Path):
     """
