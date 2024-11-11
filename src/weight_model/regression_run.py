@@ -1,3 +1,7 @@
+"""
+This contains the functions to run the CNN regression models.
+"""
+
 import csv
 from dataclasses import dataclass
 import logging
@@ -25,6 +29,7 @@ from utils.utils import write_csv_file
 logger = logging.getLogger(__name__)
 
 torch.manual_seed(42)
+
 
 class CustomDataset(Dataset):
     """
@@ -102,7 +107,12 @@ class EarlyStopping:
         self.val_loss_min = val_loss
 
 
-def run_regression_folds(data_path: Path, results_dir: Path, run_config: RunConfig, test_set_path: Path = None):
+def run_regression_folds(
+    data_path: Path,
+    results_dir: Path,
+    run_config: RunConfig,
+    test_set_path: Path = None,
+):
     """
     Runs regression model on dataset folds.
 
@@ -122,7 +132,20 @@ def run_regression_folds(data_path: Path, results_dir: Path, run_config: RunConf
         os.mkdir(results_dir)
 
     summary_filename = "summary.csv"
-    header = ["MAE_val", "MAPE_val", "RMSE_val", "R2_val", "MAE_test", "MAPE_test", "RMSE_test", "R2_test"] if test_set_path else ["MAE", "MAPE", "RMSE", "R2"]
+    header = (
+        [
+            "MAE_val",
+            "MAPE_val",
+            "RMSE_val",
+            "R2_val",
+            "MAE_test",
+            "MAPE_test",
+            "RMSE_test",
+            "R2_test",
+        ]
+        if test_set_path
+        else ["MAE", "MAPE", "RMSE", "R2"]
+    )
     metrics = []
 
     for i, dataset in enumerate(dataset_folds):
@@ -137,19 +160,21 @@ def run_regression_folds(data_path: Path, results_dir: Path, run_config: RunConf
             results_dir=fold_results_dir,
             input_dir=data_path,
             X_test=X_test,
-            y_test=y_test
+            y_test=y_test,
         )
         if type(results) == tuple:
-            metrics.append([
-                results[0].mae,
-                results[0].mape,
-                results[0].rmse,
-                results[0].r2_score,
-                results[1].mae,
-                results[1].mape,
-                results[1].rmse,
-                results[1].r2_score,
-            ])
+            metrics.append(
+                [
+                    results[0].mae,
+                    results[0].mape,
+                    results[0].rmse,
+                    results[0].r2_score,
+                    results[1].mae,
+                    results[1].mape,
+                    results[1].rmse,
+                    results[1].r2_score,
+                ]
+            )
         else:
             metrics.append([results.mae, results.mape, results.rmse, results.r2_score])
 
@@ -174,7 +199,7 @@ def run_regression(
     results_dir: Path,
     input_dir: Path,
     X_test: np.ndarray = None,
-    y_test: np.ndarray = None
+    y_test: np.ndarray = None,
 ) -> Union[ModelRunResults, tuple[ModelRunResults, ModelRunResults]]:
     """
     Run the pytorch regression model.
@@ -263,7 +288,6 @@ def run_regression(
     )
 
     model.load_state_dict(torch.load(early_stopping.path.parent / "early_stopping.pth"))
-
 
     predictions = _test(model=model, test_loader=val_loader)
 

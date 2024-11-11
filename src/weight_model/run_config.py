@@ -1,3 +1,9 @@
+"""
+The run configurations for the CNN models.
+
+Run configurations contain the training and model parameters.
+"""
+
 from abc import abstractmethod, ABC
 from dataclasses import dataclass
 import logging
@@ -20,13 +26,15 @@ DATA_AUGMENTATIONS = [
     v2.RandomRotation(30),
     v2.RandomResizedCrop(size=(640, 640), scale=(0.8, 1.0)),
     v2.RandomAffine(degrees=0, translate=(0.2, 0.2)),
-    v2.RandomPerspective()
+    v2.RandomPerspective(),
 ]
+
 
 class PretrainedModel(ABC):
     """
     Interface for a PretrainModel object.
     """
+
     model: torch.nn.Module
 
     @abstractmethod
@@ -174,19 +182,22 @@ class PretrainedCNNRunConfig(RunConfig):
         logger.info(model.eval())
         return model
 
+
 def get_normalise(num_channels: int = None, mean: list = None, std: list = None):
     mean = [0.485, 0.456, 0.406] if not mean else mean
     std = [0.229, 0.224, 0.225] if not std else std
     if num_channels is None or num_channels <= 3:
         mean, std = mean, std
     elif num_channels == 6:
-        mean = mean*2
-        std = std*2
+        mean = mean * 2
+        std = std * 2
     elif num_channels == 9:
-        mean = mean*3
-        std = std*3
+        mean = mean * 3
+        std = std * 3
     else:
-        raise ValueError(f"Number of channels must be 1, 2, 3, 6 or 9 and not {num_channels}")
+        raise ValueError(
+            f"Number of channels must be 1, 2, 3, 6 or 9 and not {num_channels}"
+        )
     return v2.Normalize(mean=mean, std=std)
 
 
@@ -221,10 +232,15 @@ def get_run_config(
         "delta": 0.01,
         "batch_size": 64,
         "lr_scheduler": None,
-        "exclude_attr_from_run_args": ["mean_values", "std_values", "transforms_train", "transforms_test", "exclude_attr_from_run_args"]
+        "exclude_attr_from_run_args": [
+            "mean_values",
+            "std_values",
+            "transforms_train",
+            "transforms_test",
+            "exclude_attr_from_run_args",
+        ],
     }
     num_channels = 3 if num_channels is None else num_channels
-
 
     if config_name == "resnet":
         transforms_test = [v2.ToImage(), get_normalise(num_channels)]
@@ -331,6 +347,7 @@ class MobileNetV3Small(PretrainedModel):
     def set_final_layer(self, new_layer: torch.nn.Module):
         self.model.classifier = new_layer
 
+
 class ResNet50(PretrainedModel):
     def __init__(self):
         self.model = resnet.resnet34(weights=resnet.ResNet34_Weights.IMAGENET1K_V1)
@@ -365,6 +382,7 @@ class MobileNetV3Small(PretrainedModel):
 
     def set_final_layer(self, new_layer: torch.nn.Module):
         self.model.classifier = new_layer
+
 
 class MobileNetV3Large(PretrainedModel):
     def __init__(self):

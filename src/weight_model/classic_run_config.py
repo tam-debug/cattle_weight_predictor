@@ -1,5 +1,10 @@
+"""
+The run configurations for the classical models.
+
+Run configurations contain the training and model parameters.
+"""
+
 from abc import abstractmethod
-import cv2
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Union
@@ -14,7 +19,6 @@ from sklearn.ensemble import (
 )
 from torchvision.transforms import v2
 
-# Define the augmentations
 AUGMENTATIONS = [
     # v2.RandomHorizontalFlip(0.5),
     # v2.RandomRotation(30),
@@ -215,7 +219,9 @@ def get_classic_run_config(
 
         return SvrRunConfig(
             model_name=model_name,
-            transforms_train=v2.Compose(transforms_train) if len(transforms_train) > 0 else None,
+            transforms_train=(
+                v2.Compose(transforms_train) if len(transforms_train) > 0 else None
+            ),
             transforms_test=v2.Compose(transforms_test) if transforms_test else None,
             kernel=kernel,
             degree=degree,
@@ -234,7 +240,9 @@ def get_classic_run_config(
 
         return LinearRunConfig(
             model_name=model_name,
-            transforms_train=v2.Compose(transforms_train) if len(transforms_train) > 0 else None,
+            transforms_train=(
+                v2.Compose(transforms_train) if len(transforms_train) > 0 else None
+            ),
             transforms_test=v2.Compose(transforms_test) if transforms_test else None,
             exclude_attr_from_run_args=exclude_from_run_args,
         )
@@ -251,7 +259,9 @@ def get_classic_run_config(
 
         return RidgeRunConfig(
             model_name=model_name,
-            transforms_train=v2.Compose(transforms_train) if len(transforms_train) > 0 else None,
+            transforms_train=(
+                v2.Compose(transforms_train) if len(transforms_train) > 0 else None
+            ),
             transforms_test=v2.Compose(transforms_test) if transforms_test else None,
             exclude_attr_from_run_args=exclude_from_run_args,
             fit_intercept=fit_intercept,
@@ -268,7 +278,9 @@ def get_classic_run_config(
         # By default, uses the Decision Tree Regressor as base estimator
         return BaggingRunConfig(
             model_name=model_name,
-            transforms_train=v2.Compose(transforms_train) if len(transforms_train) > 0 else None,
+            transforms_train=(
+                v2.Compose(transforms_train) if len(transforms_train) > 0 else None
+            ),
             transforms_test=v2.Compose(transforms_test) if transforms_test else None,
             exclude_attr_from_run_args=exclude_from_run_args,
         )
@@ -276,7 +288,9 @@ def get_classic_run_config(
         model_name = "RandomForestRegressor"
         return RandomForestRunConfig(
             model_name=model_name,
-            transforms_train=v2.Compose(transforms_train) if len(transforms_train) > 0 else None,
+            transforms_train=(
+                v2.Compose(transforms_train) if len(transforms_train) > 0 else None
+            ),
             transforms_test=v2.Compose(transforms_test) if transforms_test else None,
             exclude_attr_from_run_args=exclude_from_run_args,
         )
@@ -284,7 +298,9 @@ def get_classic_run_config(
         model_name = "GradientBoostingRegressor"
         return GradientBoostingRunConfig(
             model_name=model_name,
-            transforms_train=v2.Compose(transforms_train) if len(transforms_train) > 0 else None,
+            transforms_train=(
+                v2.Compose(transforms_train) if len(transforms_train) > 0 else None
+            ),
             transforms_test=v2.Compose(transforms_test) if transforms_test else None,
             exclude_attr_from_run_args=exclude_from_run_args,
         )

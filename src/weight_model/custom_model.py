@@ -1,10 +1,10 @@
+"""
+The model definitions of the custom CNN models.
+"""
 import torch.nn as nn
 import logging
 
 logger = logging.getLogger(__name__)
-
-# Define a basic CNN model for regression
-
 
 class CNNModel_4(nn.Module):
     def __init__(self, num_channels: int):
